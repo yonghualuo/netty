@@ -175,6 +175,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
                     // Schedule connect timeout.
                     int connectTimeoutMillis = config().getConnectTimeoutMillis();
                     if (connectTimeoutMillis > 0) {
+                        // 根据连接超时的时间设置定时任务，超时之后触发校验，如果发现连接并没有完成，则关闭句柄，释放资源，设置异常堆栈并发起去注册
                         connectTimeoutFuture = eventLoop().schedule(new Runnable() {
                             @Override
                             public void run() {
@@ -188,6 +189,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
                         }, connectTimeoutMillis, TimeUnit.MILLISECONDS);
                     }
 
+                    // 设置连接结果监听器，如果接收到连接完成通知则判断连接是否可以取消，如果取消则关闭句柄，释放资源，发起取消注册操作
                     promise.addListener(new ChannelFutureListener() {
                         @Override
                         public void operationComplete(ChannelFuture future) throws Exception {

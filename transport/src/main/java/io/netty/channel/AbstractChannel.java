@@ -391,6 +391,11 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             return remoteAddress0();
         }
 
+        /**
+         * 主要用于将当前UnSafe对应的Channel注册到EventLoop的多路复用器上，然后调用DefaultChannelPipeline的fireChannelRegister方法
+         * 如果channel被激活，调用DefaultChannelPipeline的fireChannelActive方法
+         * @param promise
+         */
         @Override
         public final void register(final ChannelPromise promise) {
             if (eventLoop.inEventLoop()) {
@@ -421,6 +426,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 if (!ensureOpen(promise)) {
                     return;
                 }
+                // 注册
                 doRegister();
                 registered = true;
                 promise.setSuccess();
@@ -440,6 +446,11 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
         }
 
+        /**
+         * 主要用于绑定指定的端口， 对于服务器用于绑定监听端口；对于客户端，主要用于指定客户端Channel的本地绑定Socket地址
+         * @param localAddress
+         * @param promise
+         */
         @Override
         public final void bind(final SocketAddress localAddress, final ChannelPromise promise) {
             if (!ensureOpen(promise)) {
@@ -463,6 +474,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             try {
                 doBind(localAddress);
             } catch (Throwable t) {
+                // 发送异常
                 promise.setFailure(t);
                 closeIfClosed();
                 return;
@@ -502,6 +514,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
         @Override
         public final void close(final ChannelPromise promise) {
+            // 是否处于刷新状态, 如果是, 说明还有消息尚未发送出去, 需要等到所有消息发送完成再关闭链路
             if (inFlush0) {
                 invokeLater(new Runnable() {
                     @Override
@@ -594,6 +607,11 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
         }
 
+        /**
+         * 将消息添加到环形发送数组中，并不是真正的写Channel
+         * @param msg
+         * @param promise
+         */
         @Override
         public void write(Object msg, ChannelPromise promise) {
             if (!isActive()) {
@@ -606,10 +624,14 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 // release message now to prevent resource-leak
                 ReferenceCountUtil.release(msg);
             } else {
+                // 放入环形数组
                 outboundBuffer.addMessage(msg, promise);
             }
         }
 
+        /**
+         * 负责将发送缓冲区中待发送的消息全部写入Channel中，并发送给通信对方
+         */
         @Override
         public void flush() {
             ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;

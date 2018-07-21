@@ -312,6 +312,7 @@ public final class ChannelOutboundBuffer {
         safeRelease(msg);
 
         promise.trySuccess();
+        // 减去已经发送的字节数，会进行发送低水位的判断和事件通知
         decrementPendingOutboundBytes(size);
 
         return true;

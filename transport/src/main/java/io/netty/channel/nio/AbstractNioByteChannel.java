@@ -36,6 +36,7 @@ import java.nio.channels.SelectionKey;
  * {@link AbstractNioChannel} base class for {@link Channel}s that operate on bytes.
  */
 public abstract class AbstractNioByteChannel extends AbstractNioChannel {
+    // 负责写半包消息
     private Runnable flushTask;
 
     /**
@@ -159,6 +160,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
         int writeSpinCount = -1;
 
         for (;;) {
+            // 从发送消息循环♻️数组弹出一条消息
             Object msg = in.current(true);
             if (msg == null) {
                 // Wrote all messages.
@@ -181,8 +183,11 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                     writeSpinCount = config().getWriteSpinCount();
                 }
                 for (int i = writeSpinCount - 1; i >= 0; i --) {
+                    // doWriteBytes抽象方法
                     int localFlushedAmount = doWriteBytes(buf);
+                    // TCP缓冲区已满, 发送了ZERO_WINDOW
                     if (localFlushedAmount == 0) {
+                        // 写半包标识
                         setOpWrite = true;
                         break;
                     }
@@ -194,11 +199,13 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                     }
                 }
 
+                // 更新发送进度信息
                 in.progress(flushedAmount);
 
                 if (done) {
                     in.remove();
                 } else {
+                    // 若未成功时，设置写半包标识，启动刷新线程继续发送之前没有发送完全的半包消息
                     incompleteWrite(setOpWrite);
                     break;
                 }
@@ -285,6 +292,9 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
         }
     }
 
+    /**
+     * 清除写操作位
+     */
     protected final void clearOpWrite() {
         final SelectionKey key = selectionKey();
         final int interestOps = key.interestOps();

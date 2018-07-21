@@ -79,6 +79,10 @@ public class NioServerSocketChannel extends AbstractNioMessageServerChannel
         return config;
     }
 
+    /**
+     * 判断服务端监听端口是否处于绑定状态
+     * @return
+     */
     @Override
     public boolean isActive() {
         return javaChannel().socket().isBound();
@@ -111,10 +115,12 @@ public class NioServerSocketChannel extends AbstractNioMessageServerChannel
 
     @Override
     protected int doReadMessages(List<Object> buf) throws Exception {
+        // 接收新的客户端连接
         SocketChannel ch = javaChannel().accept();
 
         try {
             if (ch != null) {
+                // 用于给NioSocketChannel分配Rector线程EventLoop
                 buf.add(new NioSocketChannel(this, childEventLoopGroup().next(), ch));
                 return 1;
             }

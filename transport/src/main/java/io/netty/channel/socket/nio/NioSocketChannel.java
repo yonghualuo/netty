@@ -173,6 +173,11 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
 
         boolean success = false;
         try {
+            /**
+             * 1） 连接成功， 返回true
+             * 2) 暂时没有连接上, 服务端没有返回ACK，连接结果不确定, 返回false
+             * 3) 连接失败, 直接抛出I/O异常
+             */
             boolean connected = javaChannel().connect(remoteAddress);
             if (!connected) {
                 selectionKey().interestOps(SelectionKey.OP_CONNECT);
@@ -180,6 +185,7 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
             success = true;
             return connected;
         } finally {
+            // 如果抛出了I/O异常，说明客户端的TCP握手请求直接被RST或者被拒绝, 此时需要关闭客户端连接
             if (!success) {
                 doClose();
             }
@@ -210,7 +216,11 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
 
     @Override
     protected int doWriteBytes(ByteBuf buf) throws Exception {
+        // 可读字节数
         final int expectedWrittenBytes = buf.readableBytes();
+        /**
+         * ByteBuf的readBytes方法功能是将当前BYtebuf的可写字节数组写入到指定的Channel中
+         */
         final int writtenBytes = buf.readBytes(javaChannel(), expectedWrittenBytes);
         return writtenBytes;
     }
@@ -246,12 +256,15 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
             long writtenBytes = 0;
             boolean done = false;
             boolean setOpWrite = false;
+            // 对循环次数做限制，防止其一直处于发送状态
             for (int i = config().getWriteSpinCount() - 1; i >= 0; i --) {
                 final long localWrittenBytes = ch.write(nioBuffers, 0, nioBufferCnt);
+                // 0说明TCP发送缓冲区已满, 很可能无法写入
                 if (localWrittenBytes == 0) {
                     setOpWrite = true;
                     break;
                 }
+                // 需要发送的字节数要减去已经发送的字节数；发送的字节总数 + 已经发送的字节数
                 expectedWrittenBytes -= localWrittenBytes;
                 writtenBytes += localWrittenBytes;
                 if (expectedWrittenBytes == 0) {
@@ -260,6 +273,7 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
                 }
             }
 
+            // 发送完成
             if (done) {
                 // Release all buffers
                 for (int i = msgCount; i > 0; i --) {
@@ -275,26 +289,33 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
                 // Did not write all buffers completely.
                 // Release the fully written buffers and update the indexes of the partially written buffer.
 
+                /**
+                 * 遍历发送缓冲区，对消息的发送结果进行判断
+                 */
                 for (int i = msgCount; i > 0; i --) {
                     final ByteBuf buf = (ByteBuf) in.current();
+                    // 读索引
                     final int readerIndex = buf.readerIndex();
+                    // 可读字节数
                     final int readableBytes = buf.writerIndex() - readerIndex;
 
+                    //  发送的大于可写, 说明bytebuf已完全发送出去, 更新发送进度
                     if (readableBytes < writtenBytes) {
                         in.progress(readableBytes);
                         in.remove();
                         writtenBytes -= readableBytes;
-                    } else if (readableBytes > writtenBytes) {
+                    } else if (readableBytes > writtenBytes) { // 可读的大于已经发送的字节数, 仅仅发送了部分数据报
                         buf.readerIndex(readerIndex + (int) writtenBytes);
                         in.progress(writtenBytes);
                         break;
-                    } else { // readableBytes == writtenBytes
+                    } else { // readableBytes == writtenBytes, 说明最后一次发送的消息是个整包消息
                         in.progress(readableBytes);
                         in.remove();
                         break;
                     }
                 }
 
+                // 更新SocketChannel的操作位OP_WRITE,等待多路复用器触发继续处理半包
                 incompleteWrite(setOpWrite);
                 break;
             }

@@ -24,6 +24,9 @@ import java.nio.channels.SelectableChannel;
 
 public abstract class AbstractNioMessageServerChannel extends AbstractNioMessageChannel implements ServerChannel {
 
+    /**
+     * 用于给新接入的客户端NioSocketChannel分配EventLoop
+     */
     private final EventLoopGroup childGroup;
 
     protected AbstractNioMessageServerChannel(

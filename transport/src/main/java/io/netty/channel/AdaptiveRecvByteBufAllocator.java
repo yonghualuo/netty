@@ -22,6 +22,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
+ * 指的是缓冲区大小可以动态调整的ByteBuf分配器
+ * 1） 通用NIO框架，适应不同场景
+ * 2）性能更高
+ * 3）更节约内存
  * The {@link RecvByteBufAllocator} that automatically increases and
  * decreases the predicted buffer size on feed back.
  * <p>
@@ -33,13 +37,23 @@ import java.util.List;
  */
 public class AdaptiveRecvByteBufAllocator implements RecvByteBufAllocator {
 
+    // 最小缓冲区长度
     static final int DEFAULT_MINIMUM = 64;
+    // 初始容量
     static final int DEFAULT_INITIAL = 1024;
+    // 最大容量
     static final int DEFAULT_MAXIMUM = 65536;
 
+    // 扩张的步进索引
     private static final int INDEX_INCREMENT = 4;
+    // 收缩的步进索引
     private static final int INDEX_DECREMENT = 1;
 
+    /**
+     * 向量数组的每个值对应一个Buffer容量
+     * 当容量小于512，由于缓冲区已经比较小，需要降低步进值，容量每次下调的幅度要小
+     * 当容量大于512，说明需要解码的消息码流比较大，这时采取调大步进幅度的方式，减少动态扩张的频率
+     */
     private static final int[] SIZE_TABLE;
 
     static {
@@ -60,6 +74,12 @@ public class AdaptiveRecvByteBufAllocator implements RecvByteBufAllocator {
 
     public static final AdaptiveRecvByteBufAllocator DEFAULT = new AdaptiveRecvByteBufAllocator();
 
+    /**
+     * 二分查找法
+     * 根据容量size查找容量向量表对应的索引
+     * @param size
+     * @return
+     */
     private static int getSizeTableIndex(final int size) {
         for (int low = 0, high = SIZE_TABLE.length - 1;;) {
             if (high < low) {
@@ -109,8 +129,17 @@ public class AdaptiveRecvByteBufAllocator implements RecvByteBufAllocator {
             return nextReceiveBufferSize;
         }
 
+        /**
+         * 当Niosocketchannel执行完读操作后，会计算获取本次轮询读取的总字节数，它就是actualReadBytes
+         *
+         *
+         * @param actualReadBytes the actual number of read bytes in the previous read operation
+         */
         @Override
         public void record(int actualReadBytes) {
+            /**
+             * 对当前索引做步进缩减， 然后获取收缩后索引对应的容量
+             */
             if (actualReadBytes <= SIZE_TABLE[Math.max(0, index - INDEX_DECREMENT - 1)]) {
                 if (decreaseNow) {
                     index = Math.max(index - INDEX_DECREMENT, minIndex);

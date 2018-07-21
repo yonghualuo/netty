@@ -118,9 +118,11 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
         final int interestOps = key.interestOps();
 
         for (;;) {
+            // POJO
             Object msg = in.current();
             if (msg == null) {
                 // Wrote all messages.
+                // 发送缓冲区为空, 所有消息都已经发送完成. 清除写半包标识
                 if ((interestOps & SelectionKey.OP_WRITE) != 0) {
                     key.interestOps(interestOps & ~SelectionKey.OP_WRITE);
                 }
