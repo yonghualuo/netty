@@ -162,6 +162,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
         for (;;) {
             // 从发送消息循环♻️数组弹出一条消息
             Object msg = in.current(true);
+            // 说明该消息已经发送完成并被回收，然后执行清空 OP_WRITE 操作位的 clearOpWrite 方法
             if (msg == null) {
                 // Wrote all messages.
                 clearOpWrite();
@@ -171,6 +172,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
             if (msg instanceof ByteBuf) {
                 ByteBuf buf = (ByteBuf) msg;
                 int readableBytes = buf.readableBytes();
+                // 如果需要发送的 ByteBuf 已经没有可写的字节，说明已经发送完成，将该消息从环形队列中删除，然后继续循环
                 if (readableBytes == 0) {
                     in.remove();
                     continue;
@@ -202,6 +204,14 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                 // 更新发送进度信息
                 in.progress(flushedAmount);
 
+                /**
+                 * 从循环发送状态退出后，首先根据实际发送的字节数更新发送进度，实际就
+                 * 是发送的字节数和需要发送的字节数的一个比值。执行完成进度更新后，判断本
+                 * 轮循环是否将需要发送的消息中所有需要发送的字节全部发送完成，如果发送完
+                 * 成，则将该消息从循环队列中删除；否则，将设置多路复用器的 OP_WRITE 操作位，
+                 * 用于通知 Reactor 线程还有没有发送完成的消息，需要继续发送，直到全部发送
+                 * 完成。
+                 */
                 if (done) {
                     in.remove();
                 } else {

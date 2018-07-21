@@ -1,21 +1,18 @@
 /*
  * Copyright 2013 The Netty Project
  *
- * The Netty Project licenses this file to you under the Apache License,
- * version 2.0 (the "License"); you may not use this file except in compliance
- * with the License. You may obtain a copy of the License at:
+ * The Netty Project licenses this file to you under the Apache License, version 2.0 (the "License"); you may not use
+ * this file except in compliance with the License. You may obtain a copy of the License at:
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations
- * under the License.
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 /*
- * Written by Josh Bloch of Google Inc. and released to the public domain,
- * as explained at http://creativecommons.org/publicdomain/zero/1.0/.
+ * Written by Josh Bloch of Google Inc. and released to the public domain, as explained at
+ * http://creativecommons.org/publicdomain/zero/1.0/.
  */
 package io.netty.channel;
 
@@ -74,8 +71,8 @@ public final class ChannelOutboundBuffer {
 
     private AbstractChannel channel;
 
-    // A circular buffer used to store messages.  The buffer is arranged such that:  flushed <= unflushed <= tail.  The
-    // flushed messages are stored in the range [flushed, unflushed).  Unflushed messages are stored in the range
+    // A circular buffer used to store messages. The buffer is arranged such that: flushed <= unflushed <= tail. The
+    // flushed messages are stored in the range [flushed, unflushed). Unflushed messages are stored in the range
     // [unflushed, tail).
     private Entry[] buffer;
     private int flushed;
@@ -89,12 +86,12 @@ public final class ChannelOutboundBuffer {
     private boolean inFail;
 
     private static final AtomicLongFieldUpdater<ChannelOutboundBuffer> TOTAL_PENDING_SIZE_UPDATER =
-            AtomicLongFieldUpdater.newUpdater(ChannelOutboundBuffer.class, "totalPendingSize");
+        AtomicLongFieldUpdater.newUpdater(ChannelOutboundBuffer.class, "totalPendingSize");
 
     private volatile long totalPendingSize;
 
     private static final AtomicIntegerFieldUpdater<ChannelOutboundBuffer> WRITABLE_UPDATER =
-            AtomicIntegerFieldUpdater.newUpdater(ChannelOutboundBuffer.class, "writable");
+        AtomicIntegerFieldUpdater.newUpdater(ChannelOutboundBuffer.class, "writable");
 
     private volatile int writable = 1;
 
@@ -110,6 +107,7 @@ public final class ChannelOutboundBuffer {
     }
 
     void addMessage(Object msg, ChannelPromise promise) {
+        // 获取 ByteBuf 的可读字节数，实际上也就是需要发送的字节数
         int size = channel.estimatorHandle().size(msg);
         if (size < 0) {
             size = 0;
@@ -121,9 +119,15 @@ public final class ChannelOutboundBuffer {
         e.promise = promise;
         e.total = total(msg);
 
+        // 如果当前指针已经达到唤醒数组的尾部，即：tail =
+        // buffer.length; 此时需要重新将指针调整为起始位置 0。由于环形数组的初始
+        // 容量为 32，后面容量的扩张是 32 的 N 倍，所以通过 & 操作就能将指针重新指到
+        // 起始位置，实现环形队列
         tail &= buffer.length - 1;
 
+        // 指针重绕后已经到达需要刷新的位置，再继续使用就会覆盖尚未发送的消息
         if (tail == flushed) {
+            // 对环形队列进行动态扩容
             addCapacity();
         }
 
@@ -144,8 +148,11 @@ public final class ChannelOutboundBuffer {
         }
 
         Entry[] e = new Entry[newCapacity];
+        // 将尚未刷新的消息拷贝到数组的首部
         System.arraycopy(buffer, p, e, 0, r);
+        // 原来数组中已经刷新并释放的Entry可以重用，所以，将其拷贝到尚未刷新消息的后面；
         System.arraycopy(buffer, 0, e, r, p);
+        // 扩容的数组全部重新初始化
         for (int i = n; i < e.length; i++) {
             e[i] = new Entry();
         }
@@ -161,8 +168,8 @@ public final class ChannelOutboundBuffer {
     }
 
     /**
-     * Increment the pending bytes which will be written at some point.
-     * This method is thread-safe!
+     * Increment the pending bytes which will be written at some point. This method is thread-safe!
+     * 计算当前需要发送消息的总字节数是否达到一次发送的高水位线，如果达到，触发 channelWritabilityChanged 事件
      */
     void incrementPendingOutboundBytes(int size) {
         // Cache the channel and check for null to make sure we not produce a NPE in case of the Channel gets
@@ -174,6 +181,9 @@ public final class ChannelOutboundBuffer {
 
         long oldValue = totalPendingSize;
         long newWriteBufferSize = oldValue + size;
+        /**
+         * 循环判断，如果需要更新的变量值没有发生变化并且更新成功退出，否则取其它 线程更新后的新值重新计算并重新赋值，这个就是自旋，通过它可以解决多线程 并发修改一个变量的无锁化问题
+         */
         while (!TOTAL_PENDING_SIZE_UPDATER.compareAndSet(this, oldValue, newWriteBufferSize)) {
             oldValue = totalPendingSize;
             newWriteBufferSize = oldValue + size;
@@ -189,8 +199,7 @@ public final class ChannelOutboundBuffer {
     }
 
     /**
-     * Decrement the pending bytes which will be written at some point.
-     * This method is thread-safe!
+     * Decrement the pending bytes which will be written at some point. This method is thread-safe!
      */
     void decrementPendingOutboundBytes(int size) {
         // Cache the channel and check for null to make sure we not produce a NPE in case of the Channel gets
@@ -218,13 +227,13 @@ public final class ChannelOutboundBuffer {
 
     private static long total(Object msg) {
         if (msg instanceof ByteBuf) {
-            return ((ByteBuf) msg).readableBytes();
+            return ((ByteBuf)msg).readableBytes();
         }
         if (msg instanceof FileRegion) {
-            return ((FileRegion) msg).count();
+            return ((FileRegion)msg).count();
         }
         if (msg instanceof ByteBufHolder) {
-            return ((ByteBufHolder) msg).content().readableBytes();
+            return ((ByteBufHolder)msg).content().readableBytes();
         }
         return -1;
     }
@@ -243,7 +252,7 @@ public final class ChannelOutboundBuffer {
                 return msg;
             }
             if (msg instanceof ByteBuf) {
-                ByteBuf buf = (ByteBuf) msg;
+                ByteBuf buf = (ByteBuf)msg;
                 if (buf.isDirect()) {
                     return buf;
                 } else {
@@ -272,11 +281,10 @@ public final class ChannelOutboundBuffer {
     }
 
     /**
-     * Replace the current msg with the given one.
-     * The replaced msg will automatically be released
+     * Replace the current msg with the given one. The replaced msg will automatically be released
      */
     public void current(Object msg) {
-        Entry entry =  buffer[flushed];
+        Entry entry = buffer[flushed];
         safeRelease(entry.msg);
         entry.msg = msg;
     }
@@ -287,11 +295,12 @@ public final class ChannelOutboundBuffer {
         if (p instanceof ChannelProgressivePromise) {
             long progress = e.progress + amount;
             e.progress = progress;
-            ((ChannelProgressivePromise) p).tryProgress(progress, e.total);
+            ((ChannelProgressivePromise)p).tryProgress(progress, e.total);
         }
     }
 
     public boolean remove() {
+        // 是否还有要发送的消息
         if (isEmpty()) {
             return false;
         }
@@ -305,10 +314,12 @@ public final class ChannelOutboundBuffer {
         ChannelPromise promise = e.promise;
         int size = e.pendingSize;
 
+        // 释放资源
         e.clear();
-
+        // flushed plus one
         flushed = flushed + 1 & buffer.length - 1;
 
+        // msg is null??
         safeRelease(msg);
 
         promise.trySuccess();
@@ -345,14 +356,16 @@ public final class ChannelOutboundBuffer {
     }
 
     /**
+     *  Netty使用的是 ByteBuf，因此，需要做下内部类型转换
+     *
      * Returns an array of direct NIO buffers if the currently pending messages are made of {@link ByteBuf} only.
-     * {@code null} is returned otherwise.  If this method returns a non-null array, {@link #nioBufferCount()} and
-     * {@link #nioBufferSize()} will return the number of NIO buffers in the returned array and the total number
-     * of readable bytes of the NIO buffers respectively.
+     * {@code null} is returned otherwise. If this method returns a non-null array, {@link #nioBufferCount()} and
+     * {@link #nioBufferSize()} will return the number of NIO buffers in the returned array and the total number of
+     * readable bytes of the NIO buffers respectively.
      * <p>
      * Note that the returned array is reused and thus should not escape
-     * {@link AbstractChannel#doWrite(ChannelOutboundBuffer)}.
-     * Refer to {@link NioSocketChannel#doWrite(ChannelOutboundBuffer)} for an example.
+     * {@link AbstractChannel#doWrite(ChannelOutboundBuffer)}. Refer to
+     * {@link NioSocketChannel#doWrite(ChannelOutboundBuffer)} for an example.
      * </p>
      */
     public ByteBuffer[] nioBuffers() {
@@ -363,7 +376,9 @@ public final class ChannelOutboundBuffer {
         ByteBuffer[] nioBuffers = this.nioBuffers;
         Object m;
         int i = flushed;
+        // 当 i = unflushed 时，说明需要刷新的消息全部赋值完成，循环执行结束
         while (i != unflushed && (m = buffer[i].msg) != null) {
+            // 非Netty的ByteBuf, 则返回空
             if (!(m instanceof ByteBuf)) {
                 this.nioBufferCount = 0;
                 this.nioBufferSize = 0;
@@ -371,10 +386,14 @@ public final class ChannelOutboundBuffer {
             }
 
             Entry entry = buffer[i];
-            ByteBuf buf = (ByteBuf) m;
+            ByteBuf buf = (ByteBuf)m;
             final int readerIndex = buf.readerIndex();
             final int readableBytes = buf.writerIndex() - readerIndex;
 
+            /**
+             * 获取可写的字节个数，如果大于 0，对需要发送的缓冲区字节总数进行累加。
+             * 然后从当前 Entry 中获取 ByteBuf 包含的最大 ByteBuffer 个数
+             */
             if (readableBytes > 0) {
                 nioBufferSize += readableBytes;
                 int count = entry.count;
@@ -382,20 +401,35 @@ public final class ChannelOutboundBuffer {
                     entry.count = count = buf.nioBufferCount();
                 }
                 int neededSpace = nioBufferCount + count;
+                // 对包含的 ByteBuffer 个数进行累加，如果超过 ChannelOutboundBuffer 预
+                // 先分配的数组上限，则进行数组扩张
                 if (neededSpace > nioBuffers.length) {
                     this.nioBuffers = nioBuffers = expandNioBufferArray(nioBuffers, neededSpace, nioBufferCount);
                 }
 
+                /**
+                 * 由于 ByteBuf 的实现不同，所以，它们内部包含的 ByteBuffer 个数是不同的
+                 */
                 if (buf.isDirect() || threadLocalDirectBufferSize <= 0) {
                     if (count == 1) {
                         ByteBuffer nioBuf = entry.buf;
+                        /**
+                         * 对 Entry 中缓存的 ByteBuffer 进行判断，如果
+                         * 为空，则调用 ByteBuf 的 internalNioBuffer 方法，将当前的 ByteBuf 转换为
+                         * JDK 的 ByteBuffer，
+                         */
                         if (nioBuf == null) {
                             // cache ByteBuffer as it may need to create a new ByteBuffer instance if its a
                             // derived buffer
                             entry.buf = nioBuf = buf.internalNioBuffer(readerIndex, readableBytes);
                         }
-                        nioBuffers[nioBufferCount ++] = nioBuf;
+                        nioBuffers[nioBufferCount++] = nioBuf;
                     } else {
+                        /**
+                         * 如果 ByteBuf 包含 NIO ByteBuffer 数组，那就获
+                         * 取 Entry 缓存的 ByteBuffer 数组，如果为空，则从当前需要刷新的 ByteBuf 中
+                         * 获取它的 ByteBuffer 数组
+                         */
                         ByteBuffer[] nioBufs = entry.buffers;
                         if (nioBufs == null) {
                             // cached ByteBuffers as they may be expensive to create in terms of Object allocation
@@ -404,8 +438,8 @@ public final class ChannelOutboundBuffer {
                         nioBufferCount = fillBufferArray(nioBufs, nioBuffers, nioBufferCount);
                     }
                 } else {
-                    nioBufferCount = fillBufferArrayNonDirect(entry, buf, readerIndex,
-                            readableBytes, alloc, nioBuffers, nioBufferCount);
+                    nioBufferCount = fillBufferArrayNonDirect(entry, buf, readerIndex, readableBytes, alloc, nioBuffers,
+                        nioBufferCount);
                 }
             }
             i = i + 1 & mask;
@@ -417,17 +451,17 @@ public final class ChannelOutboundBuffer {
     }
 
     private static int fillBufferArray(ByteBuffer[] nioBufs, ByteBuffer[] nioBuffers, int nioBufferCount) {
-        for (ByteBuffer nioBuf: nioBufs) {
+        for (ByteBuffer nioBuf : nioBufs) {
             if (nioBuf == null) {
                 break;
             }
-            nioBuffers[nioBufferCount ++] = nioBuf;
+            nioBuffers[nioBufferCount++] = nioBuf;
         }
         return nioBufferCount;
     }
 
     private static int fillBufferArrayNonDirect(Entry entry, ByteBuf buf, int readerIndex, int readableBytes,
-                                      ByteBufAllocator alloc, ByteBuffer[] nioBuffers, int nioBufferCount) {
+        ByteBufAllocator alloc, ByteBuffer[] nioBuffers, int nioBufferCount) {
         ByteBuf directBuf;
         if (alloc.isDirectBufferPooled()) {
             directBuf = alloc.directBuffer(readableBytes);
@@ -440,10 +474,19 @@ public final class ChannelOutboundBuffer {
         // cache ByteBuffer
         ByteBuffer nioBuf = entry.buf = directBuf.internalNioBuffer(0, readableBytes);
         entry.count = 1;
-        nioBuffers[nioBufferCount ++] = nioBuf;
+        nioBuffers[nioBufferCount++] = nioBuf;
         return nioBufferCount;
     }
 
+    /**
+     * 由于频繁的数组扩张会导致频繁的数组拷贝，影响性能，所以，Netty 采用
+     * 了翻倍扩张的方式，新的数组创建之后，将老的数据内容拷贝到新创建的数组中
+     * 返回
+     * @param array
+     * @param neededSpace
+     * @param size
+     * @return
+     */
     private static ByteBuffer[] expandNioBufferArray(ByteBuffer[] array, int neededSpace, int size) {
         int newCapacity = array.length;
         do {
@@ -484,7 +527,7 @@ public final class ChannelOutboundBuffer {
     }
 
     void failFlushed(Throwable cause) {
-        // Make sure that this method does not reenter.  A listener added to the current promise can be notified by the
+        // Make sure that this method does not reenter. A listener added to the current promise can be notified by the
         // current thread in the tryFailure() call of the loop below, and the listener can trigger another fail() call
         // indirectly (usually by closing the channel.)
         //

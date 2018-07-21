@@ -275,6 +275,14 @@ public class UnpooledHeapByteBuf extends AbstractReferenceCountedByteBuf {
         return new ByteBuffer[] { nioBuffer(index, length) };
     }
 
+    /**
+     * 获取 ByteBuffer 实例，然后调用它的 clear() 方法对它的指针进行初始化，
+     * 随后将 Position 指针设置为 index, limit 指针设置为 index + length。这些
+     * 初始化操作完成之后 ByteBuffer 就可以被正确的读写。
+     * @param index
+     * @param length
+     * @return
+     */
     @Override
     public ByteBuffer internalNioBuffer(int index, int length) {
         return (ByteBuffer) internalNioBuffer().clear().position(index).limit(index + length);

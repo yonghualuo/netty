@@ -1,17 +1,14 @@
 /*
  * Copyright 2012 The Netty Project
  *
- * The Netty Project licenses this file to you under the Apache License,
- * version 2.0 (the "License"); you may not use this file except in compliance
- * with the License. You may obtain a copy of the License at:
+ * The Netty Project licenses this file to you under the Apache License, version 2.0 (the "License"); you may not use
+ * this file except in compliance with the License. You may obtain a copy of the License at:
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations
- * under the License.
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 package io.netty.channel.socket.nio;
 
@@ -70,8 +67,8 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
     /**
      * Create a new instance
      *
-     * @param parent    the {@link Channel} which created this instance or {@code null} if it was created by the user
-     * @param socket    the {@link SocketChannel} which will be used
+     * @param parent the {@link Channel} which created this instance or {@code null} if it was created by the user
+     * @param socket the {@link SocketChannel} which will be used
      */
     public NioSocketChannel(Channel parent, EventLoop eventLoop, SocketChannel socket) {
         super(parent, eventLoop, socket);
@@ -80,7 +77,7 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
 
     @Override
     public ServerSocketChannel parent() {
-        return (ServerSocketChannel) super.parent();
+        return (ServerSocketChannel)super.parent();
     }
 
     @Override
@@ -95,7 +92,7 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
 
     @Override
     protected SocketChannel javaChannel() {
-        return (SocketChannel) super.javaChannel();
+        return (SocketChannel)super.javaChannel();
     }
 
     @Override
@@ -111,12 +108,12 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
 
     @Override
     public InetSocketAddress localAddress() {
-        return (InetSocketAddress) super.localAddress();
+        return (InetSocketAddress)super.localAddress();
     }
 
     @Override
     public InetSocketAddress remoteAddress() {
-        return (InetSocketAddress) super.remoteAddress();
+        return (InetSocketAddress)super.remoteAddress();
     }
 
     @Override
@@ -174,9 +171,7 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
         boolean success = false;
         try {
             /**
-             * 1） 连接成功， 返回true
-             * 2) 暂时没有连接上, 服务端没有返回ACK，连接结果不确定, 返回false
-             * 3) 连接失败, 直接抛出I/O异常
+             * 1） 连接成功， 返回true 2) 暂时没有连接上, 服务端没有返回ACK，连接结果不确定, 返回false 3) 连接失败, 直接抛出I/O异常
              */
             boolean connected = javaChannel().connect(remoteAddress);
             if (!connected) {
@@ -214,12 +209,19 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
         return byteBuf.writeBytes(javaChannel(), byteBuf.writableBytes());
     }
 
+    /**
+     * 将当前 ByteBuf 中的可写字节数组写入到指定的 Channel 中
+     * @param buf           the {@link ByteBuf} from which the bytes should be written
+     * @return
+     * @throws Exception
+     */
     @Override
     protected int doWriteBytes(ByteBuf buf) throws Exception {
         // 可读字节数
         final int expectedWrittenBytes = buf.readableBytes();
         /**
          * ByteBuf的readBytes方法功能是将当前BYtebuf的可写字节数组写入到指定的Channel中
+         * 由于我们将SocketChannel 设置为异步非阻塞模式，所以写操作不会阻塞
          */
         final int writtenBytes = buf.readBytes(javaChannel(), expectedWrittenBytes);
         return writtenBytes;
@@ -236,28 +238,36 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
     protected void doWrite(ChannelOutboundBuffer in) throws Exception {
         for (;;) {
             // Do non-gathering write for a single buffer case.
+            // 计算需要发送的消息个数（unflushed - flush）, 如果只有 1 个消
+            // 息需要发送，则调用父类的写操作
             final int msgCount = in.size();
+            // 单条消息
             if (msgCount <= 1) {
                 super.doWrite(in);
                 return;
             }
 
+            // 多条消息
             // Ensure the pending writes are made of ByteBufs only.
             ByteBuffer[] nioBuffers = in.nioBuffers();
+            // 对 ByteBuffer 数组进行判断，看是否还有单个需要发送的消息，如果没有
+            // 则直接返回，有则发送
             if (nioBuffers == null) {
                 super.doWrite(in);
                 return;
             }
 
             int nioBufferCnt = in.nioBufferCount();
+            // 获取需要发送的总字节数
             long expectedWrittenBytes = in.nioBufferSize();
 
             final SocketChannel ch = javaChannel();
             long writtenBytes = 0;
             boolean done = false;
             boolean setOpWrite = false;
-            // 对循环次数做限制，防止其一直处于发送状态
-            for (int i = config().getWriteSpinCount() - 1; i >= 0; i --) {
+            // 对循环次数做限制，防止其一直处于发送状态, Reactor 线程无法及时读取其它消息和执行排队的 Task
+            // 对一次 Selector 轮询的写操作次数进行上限控制，
+            for (int i = config().getWriteSpinCount() - 1; i >= 0; i--) {
                 final long localWrittenBytes = ch.write(nioBuffers, 0, nioBufferCnt);
                 // 0说明TCP发送缓冲区已满, 很可能无法写入
                 if (localWrittenBytes == 0) {
@@ -276,7 +286,7 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
             // 发送完成
             if (done) {
                 // Release all buffers
-                for (int i = msgCount; i > 0; i --) {
+                for (int i = msgCount; i > 0; i--) {
                     in.remove();
                 }
 
@@ -292,20 +302,20 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
                 /**
                  * 遍历发送缓冲区，对消息的发送结果进行判断
                  */
-                for (int i = msgCount; i > 0; i --) {
-                    final ByteBuf buf = (ByteBuf) in.current();
+                for (int i = msgCount; i > 0; i--) {
+                    final ByteBuf buf = (ByteBuf)in.current();
                     // 读索引
                     final int readerIndex = buf.readerIndex();
                     // 可读字节数
                     final int readableBytes = buf.writerIndex() - readerIndex;
 
-                    //  发送的大于可写, 说明bytebuf已完全发送出去, 更新发送进度
+                    // 发送的大于可写, 说明bytebuf已完全发送出去, 更新发送进度
                     if (readableBytes < writtenBytes) {
                         in.progress(readableBytes);
                         in.remove();
                         writtenBytes -= readableBytes;
                     } else if (readableBytes > writtenBytes) { // 可读的大于已经发送的字节数, 仅仅发送了部分数据报
-                        buf.readerIndex(readerIndex + (int) writtenBytes);
+                        buf.readerIndex(readerIndex + (int)writtenBytes);
                         in.progress(writtenBytes);
                         break;
                     } else { // readableBytes == writtenBytes, 说明最后一次发送的消息是个整包消息

@@ -621,6 +621,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 } else {
                     promise.tryFailure(CLOSED_CHANNEL_EXCEPTION);
                 }
+                // 此处的消息通常是经过编码后的ByteBuf，因此需要释放
                 // release message now to prevent resource-leak
                 ReferenceCountUtil.release(msg);
             } else {
@@ -639,6 +640,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 return;
             }
 
+            // 将发送环形数组的 unflushed 指针修改为 tail，标识本次要发送的消息范围
             outboundBuffer.addFlush();
             flush0();
         }

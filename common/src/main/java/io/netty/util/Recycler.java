@@ -45,6 +45,7 @@ public abstract class Recycler<T> {
     public final boolean recycle(T o, Handle<T> handle) {
         @SuppressWarnings("unchecked")
         Stack<T> stack = (Stack<T>) handle;
+        // Recycler instance  <- Stack instance
         if (stack.parent != this) {
             return false;
         }
@@ -70,6 +71,7 @@ public abstract class Recycler<T> {
         final Recycler<T> parent;
         final Thread thread;
         private T[] elements;
+        // 栈中元素的个数
         private int size;
         private final Map<T, Boolean> map = new IdentityHashMap<T, Boolean>(INITIAL_CAPACITY);
 
@@ -104,6 +106,7 @@ public abstract class Recycler<T> {
             }
 
             int size = this.size;
+            // 扩容
             if (size == elements.length) {
                 T[] newElements = newArray(size << 1);
                 System.arraycopy(elements, 0, newElements, 0, size);

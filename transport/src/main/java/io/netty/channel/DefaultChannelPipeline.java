@@ -1057,9 +1057,15 @@ final class DefaultChannelPipeline implements ChannelPipeline {
 
         @Override
         public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+            // AbstractUnsafe
             unsafe.write(msg, promise);
         }
 
+        /**
+         * 负责将 ByteBuffer 消息写入到 SocketChannel 中发送给对方
+         * @param ctx
+         * @throws Exception
+         */
         @Override
         public void flush(ChannelHandlerContext ctx) throws Exception {
             unsafe.flush();
