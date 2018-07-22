@@ -73,6 +73,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
      */
     protected AbstractChannel(Channel parent, EventLoop eventLoop) {
         this.parent = parent;
+        // validate eventLoop type
         this.eventLoop = validate(eventLoop);
         unsafe = newUnsafe();
         pipeline = new DefaultChannelPipeline(this);
@@ -431,6 +432,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 registered = true;
                 promise.setSuccess();
                 pipeline.fireChannelRegistered();
+                // open and isConnected
                 if (isActive()) {
                     pipeline.fireChannelActive();
                 }

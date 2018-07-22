@@ -28,9 +28,13 @@ import java.net.SocketAddress;
 
 /**
  *
- * 不建议直接在业务 ChannelHandler 中启动线程或者线程池处理，建议将不同的
+ * Tips: 不建议直接在业务 ChannelHandler 中启动线程或者线程池处理，建议将不同的
  * 业务统一封装成 Task，统一投递到后端的业务线程池中进行处理。过多的业务
  * ChannelHandler 会带来开发效率和可维护性问题，不要把 Netty 当作业务容器
+ *
+ * 2. 入站(ChannelInboundHandler)和出站(ChannelOutboundHandler)之间有一个明显的区别：
+ * 若数据是从用户应用程序到远程主机则是“出站(outbound)”，
+ * 相反若数据时从远程主机到用户应用程序则是“入站(inbound)”。
  *
  * Handles an I/O event or intercepts an I/O operation, and forwards it to its next handler in
  * its {@link ChannelPipeline}.

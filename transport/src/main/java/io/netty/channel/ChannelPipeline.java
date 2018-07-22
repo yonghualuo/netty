@@ -84,7 +84,7 @@ import java.util.NoSuchElementException;
  *  +---------------+-----------------------------------+---------------+
  *  |               |                                   |               |
  *  |       [ Socket.read() ]                    [ Socket.write() ]     |
- *  |                                                                   |
+ *  |          [ inboud ]                           [ outbound ]        |
  *  |  Netty Internal I/O Threads (Transport Implementation)            |
  *  +-------------------------------------------------------------------+
  * </pre>

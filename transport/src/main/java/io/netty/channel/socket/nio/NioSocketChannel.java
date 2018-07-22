@@ -40,8 +40,13 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
 
     private static final ChannelMetadata METADATA = new ChannelMetadata(false);
 
+    /**
+     * 创建原生的SocketChannel
+     * @return
+     */
     private static SocketChannel newSocket() {
         try {
+            // create a new socket channel
             return SocketChannel.open();
         } catch (IOException e) {
             throw new ChannelException("Failed to open a socket.", e);

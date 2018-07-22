@@ -207,6 +207,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
         }
 
         try {
+            // 注册ch到selector上, 并将task附加到SelectionKey上
             ch.register(selector, interestOps, task);
         } catch (Exception e) {
             throw new EventLoopException("failed to register a channel", e);
@@ -232,6 +233,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
     }
 
     /**
+     * 解决epoll空转bug
      * Replaces the current {@link Selector} of this event loop with newly created {@link Selector}s to work
      * around the infamous epoll 100% CPU bug.
      */
@@ -314,6 +316,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
         for (;;) {
             oldWakenUp = wakenUp.getAndSet(false);
             try {
+                // 队列有任务时, 防止select阻塞过长, 不能及时处理
                 if (hasTasks()) {
                     selectNow();
                 } else {
@@ -356,6 +359,8 @@ public final class NioEventLoop extends SingleThreadEventLoop {
 
                 final long ioStartTime = System.nanoTime();
                 needsToSelectAgain = false;
+
+                // 处理I/O
                 if (selectedKeys != null) {
                     processSelectedKeysOptimized(selectedKeys.flip());
                 } else {
@@ -364,6 +369,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
                 final long ioTime = System.nanoTime() - ioStartTime;
 
                 final int ioRatio = this.ioRatio;
+                // 处理 Task
                 runAllTasks(ioTime * (100 - ioRatio) / ioRatio);
 
                 if (isShuttingDown()) {
@@ -560,6 +566,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             }
         }
 
+        // 关闭channel
         for (AbstractNioChannel ch: channels) {
             ch.unsafe().close(ch.unsafe().voidPromise());
         }
@@ -596,8 +603,10 @@ public final class NioEventLoop extends SingleThreadEventLoop {
         try {
             int selectCnt = 0;
             long currentTimeNanos = System.nanoTime();
+            // 获取定时任务队列中第一个任务(?)即将到期的时间
             long selectDeadLineNanos = currentTimeNanos + delayNanos(currentTimeNanos);
             for (;;) {
+                // 每次获取任务近似超时时间
                 long timeoutMillis = (selectDeadLineNanos - currentTimeNanos + 500000L) / 1000000L;
                 if (timeoutMillis <= 0) {
                     if (selectCnt == 0) {
@@ -637,6 +646,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
                 currentTimeNanos = System.nanoTime();
             }
 
+            // 过早返回
             if (selectCnt > MIN_PREMATURE_SELECTOR_RETURNS) {
                 if (logger.isDebugEnabled()) {
                     logger.debug("Selector.select() returned prematurely {} times in a row.", selectCnt - 1);

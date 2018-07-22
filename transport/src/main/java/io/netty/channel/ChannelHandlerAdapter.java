@@ -19,7 +19,7 @@ package io.netty.channel;
 import java.net.SocketAddress;
 
 /**
- * Skelton implementation of a {@link ChannelHandler}.
+ * Skeleton implementation of a {@link ChannelHandler}.
  */
 public class ChannelHandlerAdapter implements ChannelHandler {
 

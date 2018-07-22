@@ -30,6 +30,16 @@ import java.net.SocketAddress;
 
 
 /**
+ * channel的四种状态
+ *
+ * channelUnregistered	    channel已创建但未注册到一个 EventLoop.
+ * channelRegistered	    channel 注册到一个 EventLoop.
+ * channelActive	        channel 变为活跃状态(连接到了远程主机)，现在可以接收和发送数据了
+ * channelInactive	        channel 处于非活跃状态，没有连接到远程主机
+ *
+ *
+ * nexus: the means of connection between things linked in series
+ *
  * A nexus to a network socket or a component which is capable of I/O
  * operations such as read, write, connect, and bind.
  * <p>
@@ -46,7 +56,7 @@ import java.net.SocketAddress;
  * <p>
  * All I/O operations in Netty are asynchronous.  It means any I/O calls will
  * return immediately with no guarantee that the requested I/O operation has
- * been completed at the end of the call.  Instead, you will be returned with
+ * been completed at the end of the call. Instead, you will be returned with
  * a {@link ChannelFuture} instance which will notify you when the requested I/O
  * operation has succeeded, failed, or canceled.
  *
