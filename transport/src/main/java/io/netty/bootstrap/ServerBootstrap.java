@@ -41,6 +41,11 @@ import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
 
 /**
+ * Reactor 线程模型
+ * 1) Reactor 单线程模型
+ * 2) Rector 多线程模型
+ * 3) 主从 Reactor 线程模型
+ *
  * {@link Bootstrap} sub-class which allows easy bootstrap of {@link ServerChannel}
  *
  */
@@ -119,6 +124,16 @@ public final class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, Se
     }
 
     /**
+     * Netty 用于接收客户端请求的线程池职责如下。
+     * （1）接收客户端 TCP 连接，初始化 Channel 参数；
+     * （2）将链路状态变更事件通知给 ChannelPipeline。
+     *
+     * Netty 处理 I/O 操作的 Reactor 线程池职责如下。
+     * （1）异步读取通信对端的数据报，发送读事件到 ChannelPipeline；
+     * （2）异步发送消息到通信对端，调用 ChannelPipeline 的消息发送接口；
+     * （3）执行系统调用 Task；
+     * （4）执行定时任务 Task，例如链路空闲状态监测定时任务。
+     *
      * Set the {@link EventExecutorGroup} for the parent (acceptor) and the child (client). These
      * {@link EventExecutorGroup}'s are used to handle all the events and IO for {@link SocketChannel} and
      * {@link Channel}'s.

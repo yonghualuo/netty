@@ -98,6 +98,10 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
     private final PoolArena<byte[]>[] heapArenas;
     private final PoolArena<ByteBuffer>[] directArenas;
 
+    /**
+     * 内存池实际是基于线程上下文实现的;
+     * 也就是说内存的申请和释放必须在同一线程上下文中，不能跨线程;
+     */
     final ThreadLocal<PoolThreadCache> threadCache = new ThreadLocal<PoolThreadCache>() {
         private final AtomicInteger index = new AtomicInteger();
         @Override

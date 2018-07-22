@@ -52,7 +52,15 @@ public final class ChannelOutboundBuffer {
         logger.debug("-Dio.netty.threadLocalDirectBufferSize: {}", threadLocalDirectBufferSize);
     }
 
+    /**
+     * 基于数组实现的栈的ThreadLocal对象池
+     */
     private static final Recycler<ChannelOutboundBuffer> RECYCLER = new Recycler<ChannelOutboundBuffer>() {
+        /**
+         * 对象池中不存在时创建
+         * @param handle
+         * @return
+         */
         @Override
         protected ChannelOutboundBuffer newObject(Handle<ChannelOutboundBuffer> handle) {
             return new ChannelOutboundBuffer(handle);

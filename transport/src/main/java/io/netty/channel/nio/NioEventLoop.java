@@ -43,6 +43,11 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
+ *  Netty 的 NioEventLoop 读取到消息之后，直接调用 ChannelPipeline 的
+ *  fireChannelRead (Object msg)。 只 要 用 户 不 主 动 切 换 线 程， 一 直 都 是 由
+ *  NioEventLoop 调用用户的 Handler，期间不进行线程切换。这种串行化处理方式
+ *  避免了多线程操作导致的锁的竞争，从性能角度看是最优的
+ *
  * {@link io.netty.channel.SingleThreadEventLoop} implementation which register the {@link Channel}'s to a
  * {@link Selector} and so does the multi-plexing of these in the event loop.
  *
@@ -111,6 +116,15 @@ public final class NioEventLoop extends SingleThreadEventLoop {
     private int cancelledKeys;
     private boolean needsToSelectAgain;
 
+    /**
+     * 推荐的线程数量计算公式有以下两种。
+     * •	 公式一：线程数量=（线程总时间/瓶颈资源时间）× 瓶颈资源的线程并
+     * 行数；
+     * •	 公式二：QPS=1000/线程总时间×线程数。
+     * @param parent
+     * @param executor
+     * @param selectorProvider
+     */
     NioEventLoop(NioEventLoopGroup parent, Executor executor, SelectorProvider selectorProvider) {
         super(parent, executor, false);
         if (selectorProvider == null) {

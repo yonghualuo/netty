@@ -38,6 +38,7 @@ import java.nio.charset.UnsupportedCharsetException;
  * {@link Unpooled} rather than calling an individual implementation's
  * constructor.
  *
+ * 基于0开始索引的"普通数组"
  * <h3>Random Access Indexing</h3>
  *
  * Just like an ordinary primitive byte array, {@link ByteBuf} uses
@@ -54,6 +55,7 @@ import java.nio.charset.UnsupportedCharsetException;
  * }
  * </pre>
  *
+ * 顺序索引访问
  * <h3>Sequential Access Indexing</h3>
  *
  * {@link ByteBuf} provides two pointer variables to support sequential
@@ -315,6 +317,8 @@ public abstract class ByteBuf implements ReferenceCounted, Comparable<ByteBuf> {
     public abstract ByteBuf writerIndex(int writerIndex);
 
     /**
+     * 一次性设置好 readerIndex 和 writerIndex
+     *
      * Sets the {@code readerIndex} and {@code writerIndex} of this buffer
      * in one shot.  This method is useful when you have to worry about the
      * invocation order of {@link #readerIndex(int)} and {@link #writerIndex(int)}

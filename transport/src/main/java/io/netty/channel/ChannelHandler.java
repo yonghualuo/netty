@@ -27,6 +27,11 @@ import java.lang.annotation.Target;
 import java.net.SocketAddress;
 
 /**
+ *
+ * 不建议直接在业务 ChannelHandler 中启动线程或者线程池处理，建议将不同的
+ * 业务统一封装成 Task，统一投递到后端的业务线程池中进行处理。过多的业务
+ * ChannelHandler 会带来开发效率和可维护性问题，不要把 Netty 当作业务容器
+ *
  * Handles an I/O event or intercepts an I/O operation, and forwards it to its next handler in
  * its {@link ChannelPipeline}.
  *
