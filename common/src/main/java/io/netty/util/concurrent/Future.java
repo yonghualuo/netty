@@ -20,6 +20,13 @@ import java.util.concurrent.TimeUnit;
 
 
 /**
+ *  业务逻辑结束或异常时需要告诉Future对象，有两种方式：
+ *  1) 在Future中启动线程执行业务逻辑；
+ *  2) 或者业务逻辑单独执行，通过创建的Future实例的方法如setSuccess(result)方法通知Future。
+ *  Java的FutureTask采用了第一种方法，其本身继承了Runnable，在run方法中执行传入的业务逻辑。
+ *  而Netty的Promise中采用了第二种方法。
+ *
+ *
  * The result of an asynchronous operation.
  */
 @SuppressWarnings("ClassNameSameAsAncestorName")

@@ -17,6 +17,9 @@
 package io.netty.buffer;
 
 final class PoolChunk<T> {
+    /**
+     * 分配状态
+     */
     private static final int ST_UNUSED = 0;
     private static final int ST_BRANCH = 1;
     private static final int ST_ALLOCATED = 2;
@@ -30,6 +33,12 @@ final class PoolChunk<T> {
     final T memory;
     final boolean unpooled;
 
+    /**
+     * 一个32位的整数数组,
+     * 1-2位：状态，包含四种状态：未分配（ST_UNUSED，0）、被拆分（ST_BRANCH，1）、已分配（ST_ALLOCATED，2）、分配了子页（ST_ALLOCATED_SUBPAGE，3）。
+     * 3-17位：size，内存占用的page个数。
+     * 18-32位：offset，在chunk中的偏移量。
+     */
     private final int[] memoryMap;
     private final PoolSubpage<T>[] subpages;
     /** Used to determine if the requested capacity is equal to or greater than pageSize. */
@@ -64,7 +73,7 @@ final class PoolChunk<T> {
         int chunkSizeInPages = chunkSize >>> pageShifts;
         maxSubpageAllocs = 1 << maxOrder;
 
-        // Generate the memory map.
+        // Generate the memory map. 完美二叉树
         memoryMap = new int[maxSubpageAllocs << 1];
         int memoryMapIndex = 1;
         for (int i = 0; i <= maxOrder; i ++) {
@@ -281,6 +290,7 @@ final class PoolChunk<T> {
         if (bitmapIdx == 0) {
             int val = memoryMap[memoryMapIdx];
             assert (val & 3) == ST_ALLOCATED : String.valueOf(val & 3);
+            // 通过val提取offset, size
             buf.init(this, handle, runOffset(val), reqCapacity, runLength(val));
         } else {
             initBufWithSubpage(buf, handle, bitmapIdx, reqCapacity);

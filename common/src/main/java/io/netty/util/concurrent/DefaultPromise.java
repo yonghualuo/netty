@@ -120,6 +120,11 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
         return null;
     }
 
+    /**
+     * addListener和setSuccess都会调用notifyListeners
+     * @param listener
+     * @return
+     */
     @Override
     public Promise<V> addListener(GenericFutureListener<? extends Future<? super V>> listener) {
         if (listener == null) {
@@ -229,21 +234,32 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
         PlatformDependent.throwException(cause);
     }
 
+    /**
+     * 等待Future任务结束
+     * @return
+     * @throws InterruptedException
+     */
     @Override
     public Promise<V> await() throws InterruptedException {
+        // result为voletile
         if (isDone()) {
             return this;
         }
 
+        // 线程是否中断过
         if (Thread.interrupted()) {
             throw new InterruptedException(toString());
         }
 
         synchronized (this) {
+            // cycle check done
             while (!isDone()) {
+                // 检查当前线程是否与线程池运行的线程是一个
                 checkDeadLock();
+                // waiter 计数+1, 不需要同步
                 incWaiters();
                 try {
+                    // Object的方法，让出cpu，加入等待队列
                     wait();
                 } finally {
                     decWaiters();
@@ -253,12 +269,25 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
         return this;
     }
 
+    /**
+     * 等待Future任务结束，超过事件则抛出异常
+     * @param timeout
+     * @param unit
+     * @return
+     * @throws InterruptedException
+     */
     @Override
     public boolean await(long timeout, TimeUnit unit)
             throws InterruptedException {
         return await0(unit.toNanos(timeout), true);
     }
 
+    /**
+     * 等待Future任务结束，超过事件则抛出异常
+     * @param timeoutMillis
+     * @return
+     * @throws InterruptedException
+     */
     @Override
     public boolean await(long timeoutMillis) throws InterruptedException {
         return await0(MILLISECONDS.toNanos(timeoutMillis), true);
@@ -336,6 +365,7 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
                     return true;
                 }
 
+                // 等待时间已到
                 if (waitTime <= 0) {
                     return isDone();
                 }
@@ -347,6 +377,7 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
                         try {
                             wait(waitTime / 1000000, (int) (waitTime % 1000000));
                         } catch (InterruptedException e) {
+                            // 是否响应中断
                             if (interruptable) {
                                 throw e;
                             } else {
@@ -357,6 +388,7 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
                         if (isDone()) {
                             return true;
                         } else {
+                            // 重置等待时间
                             waitTime = timeoutNanos - (System.nanoTime() - startTime);
                             if (waitTime <= 0) {
                                 return isDone();
@@ -369,6 +401,7 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
             }
         } finally {
             if (interrupted) {
+                // 中断当前线程
                 Thread.currentThread().interrupt();
             }
         }
@@ -387,6 +420,7 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
     @Override
     public Promise<V> setSuccess(V result) {
         if (setSuccess0(result)) {
+            // 通知
             notifyListeners();
             return this;
         }
@@ -497,6 +531,7 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
             } else {
                 this.result = result;
             }
+            // 通知等待线程
             if (hasWaiters()) {
                 notifyAll();
             }
@@ -529,6 +564,9 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
         waiters --;
     }
 
+    /**
+     * 在添加监听器的过程中，如果任务刚好执行完毕done(),则立即触发监听事件
+     */
     private void notifyListeners() {
         // This method doesn't need synchronization because:
         // 1) This method is always called after synchronized (this) block.

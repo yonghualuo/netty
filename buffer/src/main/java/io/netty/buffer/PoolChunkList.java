@@ -23,6 +23,7 @@ final class PoolChunkList<T> {
     private final PoolChunkList<T> nextList;
     PoolChunkList<T> prevList;
 
+    // 使用率
     private final int minUsage;
     private final int maxUsage;
 
@@ -74,6 +75,10 @@ final class PoolChunkList<T> {
         }
     }
 
+    /**
+     * 当chunk中内存可用率在[minUsage,maxUsage]区间时，这个chunk才会落到该PoolChunkList中，否则把chunk传到下一个PoolChunkList进行检查
+     * @param chunk
+     */
     void add(PoolChunk<T> chunk) {
         if (chunk.usage() >= maxUsage) {
             nextList.add(chunk);

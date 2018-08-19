@@ -187,6 +187,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     }
 
     /**
+     * bind是个异步过程, 立即返回ChannelFuture
      * Create a new {@link Channel} and bind it.
      */
     public ChannelFuture bind() {

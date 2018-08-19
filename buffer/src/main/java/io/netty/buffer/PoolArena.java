@@ -21,24 +21,51 @@ import io.netty.util.internal.StringUtil;
 
 import java.nio.ByteBuffer;
 
+/**
+ * 所有线程共享使用一个Allocator，Allocator内部保存了内存分配的相关配置信息，包含多个Arena；
+ * 每个线程会固定使用一个Arena，Arena中记录了Chunk链表和Page的使用信息
+ * @param <T>
+ */
 abstract class PoolArena<T> {
 
     final PooledByteBufAllocator parent;
 
+    /**
+     * 默认8192即8K, 但必须大于4k
+     */
     private final int pageSize;
     private final int maxOrder;
     private final int pageShifts;
     private final int chunkSize;
     private final int subpageOverflowMask;
 
+    /**
+     * 用来保存为tiny规格分配的内存页的链表，共有32个这样的链表，保存着从16开始到512字节的内存页, < 512
+     */
     private final PoolSubpage<T>[] tinySubpagePools;
+    /**
+     * 用来保存为small规格分配的内存页的链表，共有4个这样的链表，保存着从1024开始到8192字节的内存页，
+     * 链表数组的大小不是固定的，根据PageSize有所变化
+     */
     private final PoolSubpage<T>[] smallSubpagePools;
 
+    /**
+     * Arena内部有6个Chunk链表，保存在ChunkList对象中；而ChunkList本身也是链表，共有6个
+     *
+     * qInit->q000->q025->q050->q075->q100 todo
+     * 寻找chunk时，先从q050->q025->q000->qInit->q075查找可用的chunk，如果没有找到，会创建PoolChunk对象的实例
+     */
+    // 存储剩余内存50-100%个chunk
     private final PoolChunkList<T> q050;
+    // 存储剩余内存25-75%的chunk
     private final PoolChunkList<T> q025;
+    // 存储剩余内存1-50%的chunk
     private final PoolChunkList<T> q000;
+    // 存储剩余内存0-25%的chunk
     private final PoolChunkList<T> qInit;
+    // 存储剩余内存75-100%个chunk
     private final PoolChunkList<T> q075;
+    // 存储剩余内存100%chunk
     private final PoolChunkList<T> q100;
 
     // TODO: Test if adding padding helps under contention
@@ -132,6 +159,12 @@ abstract class PoolArena<T> {
         allocateNormal(buf, reqCapacity, normCapacity);
     }
 
+    /**
+     * 初始状态下所有的PoolChunkList都是空的，所以在此先创建chunk块并且添加到PoolChunkList中
+     * @param buf
+     * @param reqCapacity
+     * @param normCapacity
+     */
     private synchronized void allocateNormal(PooledByteBuf<T> buf, int reqCapacity, int normCapacity) {
         if (q050.allocate(buf, reqCapacity, normCapacity) || q025.allocate(buf, reqCapacity, normCapacity) ||
             q000.allocate(buf, reqCapacity, normCapacity) || qInit.allocate(buf, reqCapacity, normCapacity) ||
@@ -180,6 +213,13 @@ abstract class PoolArena<T> {
         return table[tableIdx];
     }
 
+    /**
+     * 分配的内存大小小于512时内存池分配tiny块，大小在[512，pageSize]区间时分配small块，
+     * tiny块和small块基于page分配，分配的大小在(pageSize，chunkSize]区间时分配normal块，normall块基于chunk分配，
+     * 内存大小超过chunk，内存池无法分配这种大内存，直接由JVM堆分配，内存池也不会缓存这种内存
+     * @param reqCapacity
+     * @return
+     */
     private int normalizeCapacity(int reqCapacity) {
         if (reqCapacity < 0) {
             throw new IllegalArgumentException("capacity: " + reqCapacity + " (expected: 0+)");
@@ -188,10 +228,12 @@ abstract class PoolArena<T> {
             return reqCapacity;
         }
 
+        // 0xFE00 = 511
         if ((reqCapacity & 0xFFFFFE00) != 0) { // >= 512
             // Doubled
 
             int normalizedCapacity = reqCapacity;
+            // >>> 无符号右移
             normalizedCapacity |= normalizedCapacity >>>  1;
             normalizedCapacity |= normalizedCapacity >>>  2;
             normalizedCapacity |= normalizedCapacity >>>  4;

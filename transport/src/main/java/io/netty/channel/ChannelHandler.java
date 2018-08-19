@@ -33,6 +33,7 @@ import java.net.SocketAddress;
  * ChannelHandler 会带来开发效率和可维护性问题，不要把 Netty 当作业务容器
  *
  * 2. 入站(ChannelInboundHandler)和出站(ChannelOutboundHandler)之间有一个明显的区别：
+ *
  * 若数据是从用户应用程序到远程主机则是“出站(outbound)”，
  * 相反若数据时从远程主机到用户应用程序则是“入站(inbound)”。
  *

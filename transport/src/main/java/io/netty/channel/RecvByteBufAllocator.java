@@ -19,6 +19,9 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 
 /**
+ * 用于计算下次读循环应该分配多少内存的接口
+ * 读循环是因为分配的初始ByteBuf不一定能够容纳所有读取到的数据，因此可能会多次读取，直到读完客户端发送的数据。
+ *
  * Allocates a new receive buffer whose capacity is probably large enough to read all inbound data and small enough
  * not to waste its space.
  */
@@ -32,12 +35,14 @@ public interface RecvByteBufAllocator {
 
     interface Handle {
         /**
+         * 创建一个空间合理的缓冲，在不浪费空间的情况下能够容纳需要读取的所有inbound的数据，内部由alloc来进行实际的分配
          * Creates a new receive buffer whose capacity is probably large enough to read all inbound data and small
          * enough not to waste its space.
          */
         ByteBuf allocate(ByteBufAllocator alloc);
 
         /**
+         * 猜测所需的缓冲区大小，不进行实际的分配
          * Similar to {@link #allocate(ByteBufAllocator)} except that it does not allocate anything but just tells the
          * capacity.
          */

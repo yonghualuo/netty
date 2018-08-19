@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
+ * 使用slab的思想记录了不同的内存块大小，按照分配需要的大小寻找最合适的内存块
  * 指的是缓冲区大小可以动态调整的ByteBuf分配器
  * 1） 通用NIO框架，适应不同场景
  * 2）性能更高

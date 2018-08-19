@@ -24,10 +24,22 @@ import io.netty.util.internal.logging.InternalLoggerFactory;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * Netty采用了jemalloc的思想
+ *
+ * 使用Thread-local storage，每个线程各种保存Arena和缓存池信息，这样可以减少竞争并提高访问效率。
+ * Arena将内存分为很多Chunk进行管理，Chunk内部保存Page，以页为单位申请。
+ *
+ * 将内存分为PoolArena，PoolChunk和PoolPage，Chunk中包含多个内存页，Arena包含3个Chunk。
+ *
+ */
 public class PooledByteBufAllocator extends AbstractByteBufAllocator {
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(PooledByteBufAllocator.class);
 
+    /**
+     * 创建多个分配器（Arena）来分离锁, 避免竞争锁
+     */
     private static final int DEFAULT_NUM_HEAP_ARENA;
     private static final int DEFAULT_NUM_DIRECT_ARENA;
 
@@ -48,6 +60,7 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
         }
         DEFAULT_PAGE_SIZE = defaultPageSize;
 
+        // 默认为11, 范围为0~14
         int defaultMaxOrder = SystemPropertyUtil.getInt("io.netty.allocator.maxOrder", 11);
         Throwable maxOrderFallbackCause = null;
         try {
@@ -101,6 +114,11 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
     /**
      * 内存池实际是基于线程上下文实现的;
      * 也就是说内存的申请和释放必须在同一线程上下文中，不能跨线程;
+     *
+     * 内存池包含两层分配区：线程私有分配区和内存池公有分配区。当内存被分配给某个线程之后，
+     * 在释放内存时释放的内存不会直接返回给公有分配区，而是直接在线程私有分配区中缓存，
+     * 当线程频繁的申请内存时会提高分配效率，同时当线程申请内存的动作不活跃时可能会造成内存浪费的情况，
+     * 这时候内存池会对线程私有分配区中的情况进行监控，当发现线程的分配活动并不活跃时会把线程缓存的内存块释放返回给公有区。
      */
     final ThreadLocal<PoolThreadCache> threadCache = new ThreadLocal<PoolThreadCache>() {
         private final AtomicInteger index = new AtomicInteger();
@@ -205,6 +223,9 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
             throw new IllegalArgumentException("maxOrder: " + maxOrder + " (expected: 0-14)");
         }
 
+        /**
+         * chunkSize = pageSize*（2的maxOrder次幂）
+         */
         // Ensure the resulting chunkSize does not overflow.
         int chunkSize = pageSize;
         for (int i = maxOrder; i > 0; i --) {

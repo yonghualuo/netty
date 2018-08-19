@@ -273,6 +273,8 @@ public abstract class SingleThreadEventExecutor extends AbstractEventExecutor {
     }
 
     /**
+     * 从scheduledTaskQueue获取需要执行的任务，加入到taskQueue，然后依次执行taskQueue的任务
+     *
      * Poll all tasks from the task queue and run them via {@link Runnable#run()} method.
      *
      * @return {@code true} if and only if at least one task was run
