@@ -102,6 +102,10 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
         return config;
     }
 
+    /**
+     * 判断监听是否启动
+     * @return
+     */
     @Override
     public boolean isActive() {
         return javaChannel().socket().isBound();
@@ -138,6 +142,7 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
 
     @Override
     protected int doReadMessages(List<Object> buf) throws Exception {
+        // 接收新的客户端连接
         SocketChannel ch = SocketUtils.accept(javaChannel());
 
         try {

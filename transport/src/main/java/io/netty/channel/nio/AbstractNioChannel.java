@@ -400,6 +400,10 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         }
     }
 
+    /**
+     * 多路复用器上取消selectionKey。
+     * @throws Exception
+     */
     @Override
     protected void doDeregister() throws Exception {
         eventLoop().cancel(selectionKey());
@@ -416,6 +420,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         readPending = true;
 
         final int interestOps = selectionKey.interestOps();
+        // 设置读操作位
         if ((interestOps & readInterestOp) == 0) {
             selectionKey.interestOps(interestOps | readInterestOp);
         }

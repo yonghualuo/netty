@@ -471,6 +471,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             try {
                 if (isShuttingDown()) {
                     closeAll();
+                    // 确认是否真的退出了？
                     if (confirmShutdown()) {
                         return;
                     }
@@ -674,6 +675,9 @@ public final class NioEventLoop extends SingleThreadEventLoop {
         }
     }
 
+    /**
+     * 把注册在selector上所有的Channel都关闭
+     */
     private void closeAll() {
         selectAgain();
         Set<SelectionKey> keys = selector.keys();

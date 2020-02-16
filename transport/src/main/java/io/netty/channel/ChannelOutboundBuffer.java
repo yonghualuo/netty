@@ -674,6 +674,7 @@ public final class ChannelOutboundBuffer {
                 int size = e.pendingSize;
                 TOTAL_PENDING_SIZE_UPDATER.addAndGet(this, -size);
 
+                // 释放发送队列中所有尚未完成发送的ByteBuf（关闭之前没有被flushed的message），等待GC。
                 if (!e.cancelled) {
                     ReferenceCountUtil.safeRelease(e.msg);
                     safeFail(e.promise, cause);

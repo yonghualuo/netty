@@ -40,6 +40,13 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 /**
+ * 处理业务本质：数据在pipeline中所有的handler的channelRead()执行过程
+ *
+ * inbound事件：通常由I/O线程触发，例如TCP链路建立事件、链路关闭事件、读事件、异常通知事件等。
+ * outbound事件：通常是由用户主动发起的网络I/0操作，例如用户发起的连接操作、绑定操作、消息发送等操作。
+ *
+ * ChannelPipeline实际上是一个ChannelHandler的容器。
+ *
  * The default {@link ChannelPipeline} implementation.  It is usually created
  * by a {@link Channel} implementation when the {@link Channel} is created.
  */
@@ -289,6 +296,10 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     }
 
     private static void addBefore0(AbstractChannelHandlerContext ctx, AbstractChannelHandlerContext newCtx) {
+        /**
+         *    A(ctx.prev), ctx
+         *    A, newCtx, ctx
+         */
         newCtx.prev = ctx.prev;
         newCtx.next = ctx;
         ctx.prev.next = newCtx;
@@ -960,12 +971,21 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         return this;
     }
 
+    /**
+     * 读取操作
+     * @param msg
+     * @return
+     */
     @Override
     public final ChannelPipeline fireChannelRead(Object msg) {
         AbstractChannelHandlerContext.invokeChannelRead(head, msg);
         return this;
     }
 
+    /**
+     * 读操作完成事件
+     * @return
+     */
     @Override
     public final ChannelPipeline fireChannelReadComplete() {
         AbstractChannelHandlerContext.invokeChannelReadComplete(head);
@@ -978,11 +998,23 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         return this;
     }
 
+    /**
+     * 绑定本地地址事件
+     *
+     * @param localAddress
+     * @return
+     */
     @Override
     public final ChannelFuture bind(SocketAddress localAddress) {
         return tail.bind(localAddress);
     }
 
+    /**
+     * 连接服务端事件
+     *
+     * @param remoteAddress
+     * @return
+     */
     @Override
     public final ChannelFuture connect(SocketAddress remoteAddress) {
         return tail.connect(remoteAddress);
@@ -1008,6 +1040,11 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         return tail.deregister();
     }
 
+    /**
+     * 刷新事件
+     *
+     * @return
+     */
     @Override
     public final ChannelPipeline flush() {
         tail.flush();
@@ -1030,11 +1067,23 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         return tail.connect(remoteAddress, localAddress, promise);
     }
 
+    /**
+     * 断开连接事件
+     *
+     * @param promise
+     * @return
+     */
     @Override
     public final ChannelFuture disconnect(ChannelPromise promise) {
         return tail.disconnect(promise);
     }
 
+    /**
+     * 关闭当前Channel事件
+     *
+     * @param promise
+     * @return
+     */
     @Override
     public final ChannelFuture close(ChannelPromise promise) {
         return tail.close(promise);
@@ -1045,6 +1094,11 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         return tail.deregister(promise);
     }
 
+    /**
+     * 读事件
+     *
+     * @return
+     */
     @Override
     public final ChannelPipeline read() {
         tail.read();
@@ -1056,6 +1110,12 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         return tail.write(msg);
     }
 
+    /**
+     * 发送事件
+     * @param msg
+     * @param promise
+     * @return
+     */
     @Override
     public final ChannelFuture write(Object msg, ChannelPromise promise) {
         return tail.write(msg, promise);

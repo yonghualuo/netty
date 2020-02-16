@@ -21,6 +21,10 @@ import io.netty.util.internal.InternalThreadLocalMap;
 import java.util.Map;
 
 /**
+ *
+ * ChannelHandler的所有接口实现都是事件透传，如果用户ChannelHandler关心某个事件，只需要覆盖ChannelHandlerAdapter对应的方法即可。
+ * 对于不关心的，可以直接继承使用父类的方法。
+ *
  * Skeleton implementation of a {@link ChannelHandler}.
  */
 public abstract class ChannelHandlerAdapter implements ChannelHandler {
