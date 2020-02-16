@@ -194,6 +194,13 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
         return -1;
     }
 
+    /**
+     * 一个long整数，其中低32位表示二叉树中的分配的节点，高32位表示subPage中分配的具体位置
+     *     |<--   24   -->| <--   6      --> | <--         32         --> |
+     *     |  long数组偏移 |  long的二进制位偏移|       所属Chunk标号         |
+     * @param bitmapIdx
+     * @return
+     */
     private long toHandle(int bitmapIdx) {
         return 0x4000000000000000L | (long) bitmapIdx << 32 | memoryMapIdx;
     }

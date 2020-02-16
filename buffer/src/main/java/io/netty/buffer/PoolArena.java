@@ -28,6 +28,18 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.Math.max;
 
+/**
+ * PoolArena，代表内存中一大块连续的区域，由多个Chunk组成，每个Chunk由多个Page组成。
+ *
+ * netty进行分配时，主要流程比较简单，
+ * 1、首先从对象池获取ByteBuf，
+ * 2、之后从线程本地缓存MemoryRegionCache中查找内存页，
+ * 3、再从Arena的内存池中查找，
+ * 4、最后查找Chunk，分配SubPage，
+ * 5、最后初始化bytebuf。
+ *
+ * @param <T>
+ */
 abstract class PoolArena<T> implements PoolArenaMetric {
     static final boolean HAS_UNSAFE = PlatformDependent.hasUnsafe();
 
@@ -37,6 +49,10 @@ abstract class PoolArena<T> implements PoolArenaMetric {
         Normal
     }
 
+    /**
+     * 用来保存tiny规格分配的内存页的链表，共有32个，保存从16开始到512字节的内存，
+     * 即（0,512），间隔为16.
+     */
     static final int numTinySubpagePools = 512 >>> 4;
 
     final PooledByteBufAllocator parent;
@@ -52,11 +68,20 @@ abstract class PoolArena<T> implements PoolArenaMetric {
     private final PoolSubpage<T>[] tinySubpagePools;
     private final PoolSubpage<T>[] smallSubpagePools;
 
+    /**
+     * 6个Chunk链表
+     */
+    // q050：存储剩余内存50-100%个chunk
     private final PoolChunkList<T> q050;
+    // q025：存储剩余内存25-75%的chunk
     private final PoolChunkList<T> q025;
+    // q000：存储剩余内存1-50%的chunk
     private final PoolChunkList<T> q000;
+    // qInit：存储剩余内存0-25%的chunk
     private final PoolChunkList<T> qInit;
+    // q075：存储剩余内存75-100%个chunk
     private final PoolChunkList<T> q075;
+    // q100：存储剩余内存100%chunk
     private final PoolChunkList<T> q100;
 
     private final List<PoolChunkListMetric> chunkListMetrics;
@@ -97,6 +122,9 @@ abstract class PoolArena<T> implements PoolArenaMetric {
             tinySubpagePools[i] = newSubpagePoolHead(pageSize);
         }
 
+        /**
+         * 用来保存small规格分配的内存页的链表，共有4个。保存着（1024, 2048,4096,8192）
+         */
         numSmallSubpagePools = pageShifts - 9;
         smallSubpagePools = newSubpagePoolArray(numSmallSubpagePools);
         for (int i = 0; i < smallSubpagePools.length; i ++) {

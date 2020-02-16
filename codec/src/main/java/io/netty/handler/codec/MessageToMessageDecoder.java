@@ -26,6 +26,9 @@ import io.netty.util.internal.TypeParameterMatcher;
 import java.util.List;
 
 /**
+ *
+ * 二次解码器，在{@link ByteToMessageDecoder}之后，将一个对象二次解码成POJO对象。
+ *
  * {@link ChannelInboundHandlerAdapter} which decodes from one message to an other message.
  *
  *

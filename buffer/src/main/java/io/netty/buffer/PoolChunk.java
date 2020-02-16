@@ -17,6 +17,10 @@
 package io.netty.buffer;
 
 /**
+ *
+ * 每个PoolChunk，用来组织和管理多个Page的内存分配和释放，默认为16Mb，
+ * 包含2048个Page，每个Page为8KB。
+ *
  * Description of algorithm for PageRun/PoolSubpage allocation from PoolChunk
  *
  * Notation: The following terms are important to understand the code
@@ -34,8 +38,11 @@ package io.netty.buffer;
  * This ensures that when we request for memory segments of size >= pageSize the normalizedCapacity
  * equals the next nearest power of 2
  *
- * To search for the first offset in chunk that has at least requested size available we construct a
- * complete balanced binary tree and store it in an array (just like heaps) - memoryMap
+ * 满二叉树
+ *
+ * To search for the first offset in chunk that has at least requested size available we construct a complete balanced binary tree and store it in an array (just like heaps)
+ *
+ *  - memoryMap
  *
  * The tree looks like this (the size of each node being mentioned in the parenthesis)
  *
@@ -67,11 +74,9 @@ package io.netty.buffer;
  *
  * Observations:
  * -------------
- * 1) memoryMap[id] = depth_of_id  => it is free / unallocated
- * 2) memoryMap[id] > depth_of_id  => at least one of its child nodes is allocated, so we cannot allocate it, but
- *                                    some of its children can still be allocated based on their availability
- * 3) memoryMap[id] = maxOrder + 1 => the node is fully allocated & thus none of its children can be allocated, it
- *                                    is thus marked as unusable
+ * 1) memoryMap[id] = depth_of_id  => it is free / unallocated，表示当前节点可分配内存。
+ * 2) memoryMap[id] > depth_of_id  => at least one of its child nodes is allocated, so we cannot allocate it, but some of its children can still be allocated based on their availability，表示当前节点至少一个子节点已经被分配，无法分配满足该深度的内存，但是可以分配更小一些的内存（通过空闲的子节点）。
+ * 3) memoryMap[id] = maxOrder（最大深度） + 1 => the node is fully allocated & thus none of its children can be allocated, it is thus marked as unusable。表示当前节点下的所有子节点都已经分配完，没有可用内存。
  *
  * Algorithm: [allocateNode(d) => we want to find the first node (from left) at height h that can be allocated]
  * ----------
@@ -108,7 +113,9 @@ final class PoolChunk<T> implements PoolChunkMetric {
     final boolean unpooled;
     final int offset;
 
+    // 节点编号，PoolSubpage的分配信息
     private final byte[] memoryMap;
+    // 节点深度，二叉树的深度，0表示可以分配16M空间，1表示可以分配8M,...,11表示可以分配8k空间。
     private final byte[] depthMap;
     private final PoolSubpage<T>[] subpages;
     /** Used to determine if the requested capacity is equal to or greater than pageSize. */
@@ -148,7 +155,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
         assert maxOrder < 30 : "maxOrder should be < 30, but is: " + maxOrder;
         maxSubpageAllocs = 1 << maxOrder;
 
-        // Generate the memory map.
+        // Generate the memory map. 下标从1开始。
         memoryMap = new byte[maxSubpageAllocs << 1];
         depthMap = new byte[memoryMap.length];
         int memoryMapIndex = 1;
@@ -271,17 +278,21 @@ final class PoolChunk<T> implements PoolChunkMetric {
      * @return index in memoryMap
      */
     private int allocateNode(int d) {
+        // 节点编号，对应存储的是depth
         int id = 1;
+        // 所有高度<d 的节点 id & initial = 0
         int initial = - (1 << d); // has last d bits = 0 and rest all = 1
-        byte val = value(id);
+        byte val = value(id);// = memoryMap[id]
         if (val > d) { // unusable
             return -1;
         }
+        // val<d 子节点可满足需求
+        // id & initial == 0 高度<d
         while (val < d || (id & initial) == 0) { // id & initial == 1 << d for all ids at depth d, for < d it is 0
-            id <<= 1;
+            id <<= 1; // 高度加1，进入子节点
             val = value(id);
-            if (val > d) {
-                id ^= 1;
+            if (val > d) { // 左节点不满足
+                id ^= 1; // 右节点
                 val = value(id);
             }
         }
@@ -289,6 +300,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
         assert value == d && (id & initial) == 1 << d : String.format("val = %d, id & initial = %d, d = %d",
                 value, id & initial, d);
         setValue(id, unusable); // mark as unusable
+        // 更新父节点的value为其左右节点
         updateParentsAlloc(id);
         return id;
     }
@@ -300,6 +312,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
      * @return index in memoryMap
      */
     private long allocateRun(int normCapacity) {
+        // ≥8k时，定位深度
         int d = maxOrder - (log2(normCapacity) - pageShifts);
         int id = allocateNode(d);
         if (id < 0) {
@@ -319,19 +332,21 @@ final class PoolChunk<T> implements PoolChunkMetric {
     private long allocateSubpage(int normCapacity) {
         // Obtain the head of the PoolSubPage pool that is owned by the PoolArena and synchronize on it.
         // This is need as we may add it back and so alter the linked-list structure.
+        // 找到arena中对应的subpage头节点
         PoolSubpage<T> head = arena.findSubpagePoolHead(normCapacity);
+        // 加锁，分配过程会修改链表结构
         synchronized (head) {
             int d = maxOrder; // subpages are only be allocated from pages i.e., leaves
             int id = allocateNode(d);
             if (id < 0) {
-                return id;
+                return id; // 叶子节点全部分配完毕
             }
 
             final PoolSubpage<T>[] subpages = this.subpages;
             final int pageSize = this.pageSize;
 
             freeBytes -= pageSize;
-
+            // 得到叶子节点的偏移索引，从0开始，即2048-0,2049-1,...
             int subpageIdx = subpageIdx(id);
             PoolSubpage<T> subpage = subpages[subpageIdx];
             if (subpage == null) {
