@@ -25,6 +25,11 @@ import java.util.List;
 
 import static java.lang.Math.*;
 
+/**
+ * ChunkList间也是通过双向链表关联。
+ *
+ * @param <T>
+ */
 final class PoolChunkList<T> implements PoolChunkListMetric {
     private static final Iterator<PoolChunkMetric> EMPTY_METRICS = Collections.<PoolChunkMetric>emptyList().iterator();
     private final PoolArena<T> arena;
@@ -81,8 +86,10 @@ final class PoolChunkList<T> implements PoolChunkListMetric {
             return false;
         }
 
+        // 从Head节点往下遍历
         for (PoolChunk<T> cur = head;;) {
             long handle = cur.allocate(normCapacity);
+            // 没有分配到
             if (handle < 0) {
                 cur = cur.next;
                 if (cur == null) {
@@ -90,7 +97,9 @@ final class PoolChunkList<T> implements PoolChunkListMetric {
                 }
             } else {
                 cur.initBuf(buf, handle, reqCapacity);
+                // 当前Chunk的内存使用率大于其最大使用率
                 if (cur.usage() >= maxUsage) {
+                    // 从当前ChunkList中移除，再添加到下一个ChunkList中。
                     remove(cur);
                     nextList.add(cur);
                 }

@@ -110,12 +110,19 @@ abstract class PoolArena<T> implements PoolArenaMetric {
         q000 = new PoolChunkList<T>(this, q025, 1, 50, chunkSize);
         qInit = new PoolChunkList<T>(this, q000, Integer.MIN_VALUE, 25, chunkSize);
 
+        // 用双向链表的形式进行连接
         q100.prevList(q075);
         q075.prevList(q050);
         q050.prevList(q025);
         q025.prevList(q000);
         q000.prevList(null);
         qInit.prevList(qInit);
+
+
+        /**
+         *  -> qInit -> q000 -> q025 -> q050 -> q075 -> q100
+         *      null <-      <-      <-      <-      <-
+         */
 
         List<PoolChunkListMetric> metrics = new ArrayList<PoolChunkListMetric>(6);
         metrics.add(qInit);
@@ -148,6 +155,7 @@ abstract class PoolArena<T> implements PoolArenaMetric {
     }
 
     static int tinyIdx(int normCapacity) {
+        // 相当于除以16，获取tiny数组下表
         return normCapacity >>> 4;
     }
 
@@ -172,12 +180,15 @@ abstract class PoolArena<T> implements PoolArenaMetric {
     }
 
     private void allocate(PoolThreadCache cache, PooledByteBuf<T> buf, final int reqCapacity) {
+        // 规格化
         final int normCapacity = normalizeCapacity(reqCapacity);
         if (isTinyOrSmall(normCapacity)) { // capacity < pageSize
             int tableIdx;
             PoolSubpage<T>[] table;
+            // 判断是否是tiny类型
             boolean tiny = isTiny(normCapacity);
             if (tiny) { // < 512
+                // 缓存分配
                 if (cache.allocateTiny(this, buf, reqCapacity, normCapacity)) {
                     // was able to allocate out of the cache so move on
                     return;
@@ -193,6 +204,7 @@ abstract class PoolArena<T> implements PoolArenaMetric {
                 table = smallSubpagePools;
             }
 
+            // 获取对应的节点
             final PoolSubpage<T> head = table[tableIdx];
 
             /**
@@ -218,10 +230,12 @@ abstract class PoolArena<T> implements PoolArenaMetric {
             return;
         }
         if (normCapacity <= chunkSize) {
+            // 首先在缓存上进行内存分配
             if (cache.allocateNormal(this, buf, reqCapacity, normCapacity)) {
                 // was able to allocate out of the cache so move on
                 return;
             }
+            // 分配不成功，做实际的内存分配，Page级别，分配一个或者多个Page
             synchronized (this) {
                 allocateNormal(buf, reqCapacity, normCapacity);
                 ++allocationsNormal;
@@ -234,6 +248,7 @@ abstract class PoolArena<T> implements PoolArenaMetric {
 
     // Method must be called inside synchronized(this) { ... } block
     private void allocateNormal(PooledByteBuf<T> buf, int reqCapacity, int normCapacity) {
+        // 在原有的Chunk上进行内存分配
         if (q050.allocate(buf, reqCapacity, normCapacity) || q025.allocate(buf, reqCapacity, normCapacity) ||
             q000.allocate(buf, reqCapacity, normCapacity) || qInit.allocate(buf, reqCapacity, normCapacity) ||
             q075.allocate(buf, reqCapacity, normCapacity)) {
@@ -241,9 +256,11 @@ abstract class PoolArena<T> implements PoolArenaMetric {
         }
 
         // Add a new chunk.
+        // 创建Chunk进行内存分配。
         PoolChunk<T> c = newChunk(pageSize, maxOrder, pageShifts, chunkSize);
         long handle = c.allocate(normCapacity);
         assert handle > 0;
+        // 初始化ByteBuf
         c.initBuf(buf, handle, reqCapacity);
         qInit.add(c);
     }
@@ -341,7 +358,7 @@ abstract class PoolArena<T> implements PoolArenaMetric {
 
         if (!isTiny(reqCapacity)) { // >= 512
             // Doubled
-
+            // 找一个2的N次方的数值，确保数值大于等于reqCapacity
             int normalizedCapacity = reqCapacity;
             normalizedCapacity --;
             normalizedCapacity |= normalizedCapacity >>>  1;
@@ -363,12 +380,17 @@ abstract class PoolArena<T> implements PoolArenaMetric {
             return alignCapacity(reqCapacity);
         }
 
-        // Quantum-spaced
+        // Quantum-spaced， 16的倍数
         if ((reqCapacity & 15) == 0) {
             return reqCapacity;
         }
-
+        // 不是16的倍数，变成最小大于当前的值+16
         return (reqCapacity & ~15) + 16;
+    }
+
+    public static void main(String... args) {
+        new DirectArena(null, 20, 32,
+        15, 4096, 0).normalizeCapacity(533);
     }
 
     int alignCapacity(int reqCapacity) {

@@ -43,6 +43,15 @@ final class PoolThreadCache {
     final PoolArena<byte[]> heapArena;
     final PoolArena<ByteBuffer> directArena;
 
+    /**
+     * tinySubPageDirectCaches[32]  0, 16, 32, 48, ... , 496Byte
+     *
+     * smallSubPageDirectCaches[4]  512, 1KB, 2KB,4KB
+     *
+     * normalSubPageDirectCaches[3]  8KB, 16KB, 32KB
+     *
+     */
+
     // Hold the caches for the different size classes, which are tiny, small and normal.
     private final MemoryRegionCache<byte[]>[] tinySubPageHeapCaches;
     private final MemoryRegionCache<byte[]>[] smallSubPageHeapCaches;
@@ -407,7 +416,9 @@ final class PoolThreadCache {
             if (entry == null) {
                 return false;
             }
+            // 初始化ByteBuf
             initBuf(entry.chunk, entry.handle, buf, reqCapacity);
+            // 将对象循环利用，将其放在对象回收站进行回收。
             entry.recycle();
 
             // allocations is not thread-safe which is fine as this is only called from the same thread all time.
@@ -462,7 +473,9 @@ final class PoolThreadCache {
 
         static final class Entry<T> {
             final Handle<Entry<?>> recyclerHandle;
+            // 代表连续的内存
             PoolChunk<T> chunk;
+            // 相当于指针，可以唯一定位Chunk里的一块连续内存
             long handle = -1;
 
             Entry(Handle<Entry<?>> recyclerHandle) {
@@ -470,6 +483,7 @@ final class PoolThreadCache {
             }
 
             void recycle() {
+                // 不指向任何一块内存
                 chunk = null;
                 handle = -1;
                 recyclerHandle.recycle(this);

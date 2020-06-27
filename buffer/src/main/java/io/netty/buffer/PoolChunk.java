@@ -134,9 +134,13 @@ final class PoolChunk<T> implements PoolChunkMetric {
     PoolChunk(PoolArena<T> arena, T memory, int pageSize, int maxOrder, int pageShifts, int chunkSize, int offset) {
         unpooled = false;
         this.arena = arena;
+        // memory为1个ByteBuf
         this.memory = memory;
+        // 8KB
         this.pageSize = pageSize;
+        // 13
         this.pageShifts = pageShifts;
+        // 11
         this.maxOrder = maxOrder;
         this.chunkSize = chunkSize;
         this.offset = offset;
@@ -148,11 +152,23 @@ final class PoolChunk<T> implements PoolChunkMetric {
         assert maxOrder < 30 : "maxOrder should be < 30, but is: " + maxOrder;
         maxSubpageAllocs = 1 << maxOrder;
 
-        // Generate the memory map.
+        /**
+         *   0                 0 ～16MB
+         *                  /         \
+         *   1           0～8MB      8～16MB
+         *            /   \          /  \
+         *   2              。。。 。。。。
+         *  。。。   /   \
+         *  11   0～8kb 8～16kb          。。。
+         *
+         */
+        // Generate the memory map. 节点数量4096
         memoryMap = new byte[maxSubpageAllocs << 1];
         depthMap = new byte[memoryMap.length];
         int memoryMapIndex = 1;
+        // d相当于1个深度，赋值的内容代表当前节点的深度。
         for (int d = 0; d <= maxOrder; ++ d) { // move down the tree one level at a time
+            // 节点数
             int depth = 1 << d;
             for (int p = 0; p < depth; ++ p) {
                 // in each level traverse left to right and set value to the depth of subtree
@@ -160,7 +176,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
                 depthMap[memoryMapIndex] = (byte) d;
                 memoryMapIndex ++;
             }
-        }
+        } // [0, 0, 1, 1, 2, 2, 2, 2, 3....]
 
         subpages = newSubpageArray(maxSubpageAllocs);
     }
@@ -211,6 +227,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
     }
 
     long allocate(int normCapacity) {
+        // 如果以Page为单位分配
         if ((normCapacity & subpageOverflowMask) != 0) { // >= pageSize
             return allocateRun(normCapacity);
         } else {
@@ -278,9 +295,11 @@ final class PoolChunk<T> implements PoolChunkMetric {
             return -1;
         }
         while (val < d || (id & initial) == 0) { // id & initial == 1 << d for all ids at depth d, for < d it is 0
+            // 代表当前节点的子节点的起始位置
             id <<= 1;
             val = value(id);
-            if (val > d) {
+            if (val > d) { // unusable
+                // id为偶数则+1，为奇数则-1，用的是其兄弟节点。
                 id ^= 1;
                 val = value(id);
             }
@@ -289,6 +308,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
         assert value == d && (id & initial) == 1 << d : String.format("val = %d, id & initial = %d, d = %d",
                 value, id & initial, d);
         setValue(id, unusable); // mark as unusable
+        // 逐层往上标记被使用。
         updateParentsAlloc(id);
         return id;
     }
@@ -300,7 +320,9 @@ final class PoolChunk<T> implements PoolChunkMetric {
      * @return index in memoryMap
      */
     private long allocateRun(int normCapacity) {
+        // 计算出第几层
         int d = maxOrder - (log2(normCapacity) - pageShifts);
+        // 根据层级关系去分配一个节点，其中id代表memoryMap中的下标
         int id = allocateNode(d);
         if (id < 0) {
             return id;

@@ -18,16 +18,20 @@ package io.netty.buffer;
 
 final class PoolSubpage<T> implements PoolSubpageMetric {
 
+    // 代表其子页属于哪个Chunk
     final PoolChunk<T> chunk;
     private final int memoryMapIdx;
     private final int runOffset;
     private final int pageSize;
+    // 用于记录子页的内存分配情况
     private final long[] bitmap;
 
+    // 双向关联
     PoolSubpage<T> prev;
     PoolSubpage<T> next;
 
     boolean doNotDestroy;
+    // 代表子页是按照多大内存进行划分的，如果按照1KB划分，则可以划分出8个子页。
     int elemSize;
     private int maxNumElems;
     private int bitmapLength;
