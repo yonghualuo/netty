@@ -73,6 +73,8 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
     }
 
     /**
+     * @param parentGroup 用于处理客户端连接请求，将请求发给childGroup的eventLoop
+     * @param childGroup  用于处理客户端请求
      * Set the {@link EventLoopGroup} for the parent (acceptor) and the child (client). These
      * {@link EventLoopGroup}'s are used to handle all the events and IO for {@link ServerChannel} and
      * {@link Channel}'s.
@@ -175,6 +177,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
                     pipeline.addLast(handler);
                 }
 
+                // 将用于服务端注册的Handler添加到pipeLine中。
                 ch.eventLoop().execute(new Runnable() {
                     @Override
                     public void run() {

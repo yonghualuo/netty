@@ -15,18 +15,15 @@
  */
 package io.netty.bootstrap;
 
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelHandlerAdapter;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.DefaultEventLoopGroup;
-import io.netty.channel.EventLoopGroup;
+import io.netty.channel.*;
 import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalChannel;
 import io.netty.channel.local.LocalEventLoopGroup;
 import io.netty.channel.local.LocalServerChannel;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.ServerSocketChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.channel.socket.nio.NioSocketChannel;
 import org.junit.Test;
 
 import java.util.UUID;
@@ -38,33 +35,31 @@ import static org.junit.Assert.assertTrue;
 
 public class ServerBootstrapTest {
 
-    @Test(timeout = 5000)
+    @Test()
     public void testHandlerRegister() throws Exception {
         final CountDownLatch latch = new CountDownLatch(1);
         final AtomicReference<Throwable> error = new AtomicReference<Throwable>();
-        LocalEventLoopGroup group = new LocalEventLoopGroup(1);
+        EventLoopGroup group = new NioEventLoopGroup(1);
         try {
             ServerBootstrap sb = new ServerBootstrap();
-            sb.channel(LocalServerChannel.class)
+            sb.channel(NioServerSocketChannel.class)
+              .option(ChannelOption.TCP_NODELAY, true)
+              .option(ChannelOption.SO_REUSEADDR, true)
               .group(group)
               .childHandler(new ChannelInboundHandlerAdapter())
-              .handler(new ChannelHandlerAdapter() {
+              .handler(new ChannelInitializer() {
                   @Override
-                  public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
-                      try {
-                          assertTrue(ctx.executor().inEventLoop());
-                      } catch (Throwable cause) {
-                          error.set(cause);
-                      } finally {
-                          latch.countDown();
-                      }
+                  protected void initChannel(Channel ch) throws Exception {
+//                      ch.pipeline().addLast
                   }
               });
-            sb.register().syncUninterruptibly();
+            ChannelFuture channelFuture = sb.bind(8100).sync();
+//            sb.register().syncUninterruptibly();
             latch.await();
+            channelFuture.channel().closeFuture().sync();
             assertNull(error.get());
         } finally {
-            group.shutdownGracefully();
+//            group.shutdownGracefully();
         }
     }
 
