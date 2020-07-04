@@ -343,9 +343,17 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
         javaChannel().close();
     }
 
+    /**
+     * 将Channel中的数据读取到刚分配的ByteBuf中，并返回读取的字节数。
+     *
+     * @param byteBuf
+     * @return
+     * @throws Exception
+     */
     @Override
     protected int doReadBytes(ByteBuf byteBuf) throws Exception {
         final RecvByteBufAllocator.Handle allocHandle = unsafe().recvBufAllocHandle();
+        // 设置最多能从Channel中读取多少字节写入ByteBuf
         allocHandle.attemptedBytesRead(byteBuf.writableBytes());
         return byteBuf.writeBytes(javaChannel(), allocHandle.attemptedBytesRead());
     }

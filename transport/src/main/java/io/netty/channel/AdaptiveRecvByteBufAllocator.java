@@ -121,15 +121,20 @@ public class AdaptiveRecvByteBufAllocator extends DefaultMaxMessagesRecvByteBufA
         }
 
         private void record(int actualReadBytes) {
+            /**
+             * index，当前分配的缓冲区大小所在的SIZE_TABLE中的索引
+             */
             if (actualReadBytes <= SIZE_TABLE[max(0, index - INDEX_DECREMENT - 1)]) {
-                if (decreaseNow) {
+                // 分配的内存过大，需要做缩容操作
+                if (decreaseNow) { // 是否立刻进行缩容操作
                     index = max(index - INDEX_DECREMENT, minIndex);
+                    // 下次需要分配的大小
                     nextReceiveBufferSize = SIZE_TABLE[index];
                     decreaseNow = false;
                 } else {
                     decreaseNow = true;
                 }
-            } else if (actualReadBytes >= nextReceiveBufferSize) {
+            } else if (actualReadBytes >= nextReceiveBufferSize) { // 扩容操作
                 index = min(index + INDEX_INCREMENT, maxIndex);
                 nextReceiveBufferSize = SIZE_TABLE[index];
                 decreaseNow = false;

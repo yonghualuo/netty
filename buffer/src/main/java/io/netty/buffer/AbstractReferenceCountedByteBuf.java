@@ -91,6 +91,7 @@ public abstract class AbstractReferenceCountedByteBuf extends AbstractByteBuf {
 
     private boolean release0(int decrement) {
         int oldRef = refCntUpdater.getAndAdd(this, -decrement);
+        // 判断当前ByteBuf是否没有被引用
         if (oldRef == decrement) {
             deallocate();
             return true;

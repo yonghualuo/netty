@@ -234,11 +234,16 @@ final class PoolChunk<T> implements PoolChunkMetric {
         return 100 - freePercentage;
     }
 
+    /**
+     *
+     * @param normCapacity
+     * @return 返回指向Chunk中某个Page的某个子块所对应的连续内存。
+     */
     long allocate(int normCapacity) {
         // 如果以Page为单位分配
         if ((normCapacity & subpageOverflowMask) != 0) { // >= pageSize
             return allocateRun(normCapacity);
-        } else {
+        } else { //在SubPage级别进行内存分配
             return allocateSubpage(normCapacity);
         }
     }
@@ -360,6 +365,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
         // 加锁，分配过程会修改链表结构
         synchronized (head) {
             int d = maxOrder; // subpages are only be allocated from pages i.e., leaves
+            // 表示在第11层分配节点
             int id = allocateNode(d);
             if (id < 0) {
                 return id; // 叶子节点全部分配完毕
@@ -378,6 +384,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
             } else {
                 subpage.init(head, normCapacity);
             }
+            // 取出一个SubPage
             return subpage.allocate();
         }
     }
@@ -438,6 +445,12 @@ final class PoolChunk<T> implements PoolChunkMetric {
         assert subpage.doNotDestroy;
         assert reqCapacity <= subpage.elemSize;
 
+        /**
+         * @param offset
+         * 这里的偏移量就是原来的Page的偏移量 + 子块的偏移量。
+         * bitmapIdx & 0x3FFFFFFF，代表当前分配的SubPage属于第几个SubPage
+         * (bitmapIdx & 0x3FFFFFFF) * subpage.elemSize，表示在当前Page的偏移量。
+         */
         buf.init(
             this, handle,
             runOffset(memoryMapIdx) + (bitmapIdx & 0x3FFFFFFF) * subpage.elemSize + offset,
@@ -477,6 +490,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
     }
 
     private static int memoryMapIdx(long handle) {
+        // 强制转化为int类型，也就是去掉高32位
         return (int) handle;
     }
 

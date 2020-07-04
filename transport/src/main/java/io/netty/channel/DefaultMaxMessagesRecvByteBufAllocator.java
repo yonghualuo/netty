@@ -88,8 +88,10 @@ public abstract class DefaultMaxMessagesRecvByteBufAllocator implements MaxMessa
         private ChannelConfig config;
         private int maxMessagePerRead;
         private int totalMessages;
+        // 总共读取的字节数
         private int totalBytesRead;
         private int attemptedBytesRead;
+        // 最后读取的字节数
         private int lastBytesRead;
         private final boolean respectMaybeMoreData = DefaultMaxMessagesRecvByteBufAllocator.this.respectMaybeMoreData;
         private final UncheckedBooleanSupplier defaultMaybeMoreSupplier = new UncheckedBooleanSupplier() {

@@ -228,10 +228,12 @@ final class PoolThreadCache {
      */
     @SuppressWarnings({ "unchecked", "rawtypes" })
     boolean add(PoolArena<?> area, PoolChunk chunk, long handle, int normCapacity, SizeClass sizeClass) {
+        // 获取MemoryRegionCache节点
         MemoryRegionCache<?> cache = cache(area, normCapacity, sizeClass);
         if (cache == null) {
             return false;
         }
+        // 将Chunk和Handle封装成实体加到Queue里面
         return cache.add(chunk, handle);
     }
 

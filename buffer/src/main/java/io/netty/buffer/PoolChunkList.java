@@ -108,6 +108,13 @@ final class PoolChunkList<T> implements PoolChunkListMetric {
         }
     }
 
+    /**
+     * 通过Chunk释放一段连续的内存
+     *
+     * @param chunk
+     * @param handle
+     * @return
+     */
     boolean free(PoolChunk<T> chunk, long handle) {
         chunk.free(handle);
         if (chunk.usage() < minUsage) {

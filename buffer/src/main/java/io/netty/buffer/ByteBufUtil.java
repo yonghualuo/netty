@@ -70,6 +70,7 @@ public final class ByteBufUtil {
     static final ByteBufAllocator DEFAULT_ALLOCATOR;
 
     static {
+        // 判断运行环境是不是Android
         String allocType = SystemPropertyUtil.get(
                 "io.netty.allocator.type", PlatformDependent.isAndroid() ? "unpooled" : "pooled");
         allocType = allocType.toLowerCase(Locale.US).trim();

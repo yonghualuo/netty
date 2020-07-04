@@ -138,6 +138,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
             final ChannelPipeline pipeline = pipeline();
             final ByteBufAllocator allocator = config.getAllocator();
             final RecvByteBufAllocator.Handle allocHandle = recvBufAllocHandle();
+            // 将配置重置
             allocHandle.reset(config);
 
             ByteBuf byteBuf = null;
@@ -157,7 +158,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                         }
                         break;
                     }
-
+                    // 增加消息的读取次数，最多循环16次
                     allocHandle.incMessagesRead(1);
                     readPending = false;
                     pipeline.fireChannelRead(byteBuf);
@@ -165,6 +166,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                 } while (allocHandle.continueReading());
 
                 allocHandle.readComplete();
+                // 传播ChannelReadComplete()事件
                 pipeline.fireChannelReadComplete();
 
                 if (close) {

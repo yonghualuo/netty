@@ -183,7 +183,7 @@ abstract class PoolArena<T> implements PoolArenaMetric {
     }
 
     static int tinyIdx(int normCapacity) {
-        // 相当于除以16，获取tiny数组下表
+        // 相当于除以16，获取tiny数组下标
         return normCapacity >>> 4;
     }
 
@@ -309,18 +309,21 @@ abstract class PoolArena<T> implements PoolArenaMetric {
     }
 
     void free(PoolChunk<T> chunk, long handle, int normCapacity, PoolThreadCache cache) {
+        // 是否为Unpooled
         if (chunk.unpooled) {
             int size = chunk.chunkSize();
             destroyChunk(chunk);
             activeBytesHuge.add(-size);
             deallocationsHuge.increment();
         } else {
+            // 哪种级别的Size
             SizeClass sizeClass = sizeClass(normCapacity);
+            // 加到缓存里
             if (cache != null && cache.add(this, chunk, handle, normCapacity, sizeClass)) {
                 // cached so not free it.
                 return;
             }
-
+            // 将缓存对象标记为未使用
             freeChunk(chunk, handle, sizeClass);
         }
     }
@@ -332,6 +335,13 @@ abstract class PoolArena<T> implements PoolArenaMetric {
         return isTiny(normCapacity) ? SizeClass.Tiny : SizeClass.Small;
     }
 
+    /**
+     * 将原先给ByteBuf分配的内存区段标记为未使用。
+     *
+     * @param chunk
+     * @param handle
+     * @param sizeClass
+     */
     void freeChunk(PoolChunk<T> chunk, long handle, SizeClass sizeClass) {
         final boolean destroyChunk;
         synchronized (this) {
