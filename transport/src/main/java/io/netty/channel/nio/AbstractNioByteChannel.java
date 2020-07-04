@@ -253,6 +253,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
     protected void doWrite(ChannelOutboundBuffer in) throws Exception {
         int writeSpinCount = config().getWriteSpinCount();
         do {
+            // 每次获取当前节点，flushedEnry指向的Entry中的msg
             Object msg = in.current();
             if (msg == null) {
                 // Wrote all messages.

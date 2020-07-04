@@ -157,7 +157,7 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
         synchronized (this) {
             addListener0(listener);
         }
-
+        // 判断flush状态是否已完成
         if (isDone()) {
             notifyListeners();
         }

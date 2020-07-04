@@ -179,6 +179,9 @@ import io.netty.handler.codec.serialization.ObjectDecoder;
  * | 0xCA | 0x0010 | 0xFE | "HELLO, WORLD" |      | 0xFE | "HELLO, WORLD" |
  * +------+--------+------+----------------+      +------+----------------+
  * </pre>
+ *
+ * 回车换行符解码器（\r\n 或 \n）
+ *
  * @see LengthFieldPrepender
  */
 public class LengthFieldBasedFrameDecoder extends ByteToMessageDecoder {
