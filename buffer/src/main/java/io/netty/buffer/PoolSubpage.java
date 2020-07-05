@@ -23,7 +23,10 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
     private final int memoryMapIdx;
     private final int runOffset;
     private final int pageSize;
-    // 用于记录子页的内存分配情况
+    /**
+     * 用于记录子页的内存分配情况
+     * long型数组, 每个long有64位bit，比特位由低到高进行排列
+      */
     private final long[] bitmap;
 
     // 双向关联
@@ -34,8 +37,11 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
     // 代表子页是按照多大内存进行划分的，如果按照1KB划分，则可以划分出8个子页。
     int elemSize;
     private int maxNumElems;
+    // 表示bitmap的实际大小，即所切分的子块数除以64.
     private int bitmapLength;
+    // 下一个可用的bitmapIdx
     private int nextAvail;
+    // 表示剩余可用的块数
     private int numAvail;
 
     // TODO: Test if adding padding helps under contention
@@ -65,9 +71,10 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
 
     void init(PoolSubpage<T> head, int elemSize) {
         doNotDestroy = true;
-        // 保存当前分配的缓冲区大小
+        // 表示保存当前分配的缓冲区大小
         this.elemSize = elemSize;
         if (elemSize != 0) {
+            // 表示一个Page大小除以分配的缓冲区大小
             maxNumElems = numAvail = pageSize / elemSize;
             nextAvail = 0;
             bitmapLength = maxNumElems >>> 6;
@@ -76,7 +83,10 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
             }
 
             for (int i = 0; i < bitmapLength; i ++) {
-                // 0 表示未分配， 1表示已分配
+                /**
+                 * bitmap标识哪个SubPage被分配
+                 * 0表示未分配，1表示已分配
+                 */
                 bitmap[i] = 0;
             }
         }
@@ -101,11 +111,12 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
         // 除以64（bitmap的相对下标）
         int q = bitmapIdx >>> 6;
         // 取余，当前绝对ID的偏移量
+        // 除以64取余，其实就是当前绝对id的偏移量, 即当前元素最低位开始的第几个比特位。
         int r = bitmapIdx & 63;
         assert (bitmap[q] >>> r & 1) == 0;
         // 当前位标记为1
         bitmap[q] |= 1L << r;
-
+        // 可用于配置的数量减一
         if (-- numAvail == 0) {
             removeFromPool();
         }
@@ -124,6 +135,7 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
         int q = bitmapIdx >>> 6;
         int r = bitmapIdx & 63;
         assert (bitmap[q] >>> r & 1) != 0;
+        // 将其位图标记为0
         bitmap[q] ^= 1L << r;
 
         setNextAvail(bitmapIdx);
@@ -172,7 +184,10 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
     private int getNextAvail() {
         int nextAvail = this.nextAvail;
         if (nextAvail >= 0) {
-            // 一个子SubPage被释放之后，会记录当前SubPage的bitmapIdx的位置，下次分配可以直接通过bitmapIdx获取一个SubPage。
+            /**
+             * 一个子SubPage被释放之后，会记录当前SubPage的bitmapIdx的位置，
+             * 下次分配可以直接通过bitmapIdx获取一个SubPage
+             */
             this.nextAvail = -1;
             return nextAvail;
         }
@@ -186,7 +201,7 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
         final int bitmapLength = this.bitmapLength;
         for (int i = 0; i < bitmapLength; i ++) {
             long bits = bitmap[i];
-            // 说明64位没有全部占满
+            // != -1 说明64位没有全部占满
             if (~bits != 0) {
                 // 找下一个节点
                 return findNextAvail0(i, bits);
@@ -195,17 +210,23 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
         return -1;
     }
 
+    /**
+     * 一个一个地往后找标记未使用的比特位
+     * @param i bitmap[] idx
+     * @param bits bitmap[i]
+     * @return 返回当前bit为0的下标，即64*i + j
+     */
     private int findNextAvail0(int i, long bits) {
         final int maxNumElems = this.maxNumElems;
-        // 代表当前long的第一个下标
+        // 乘以64，代表当前long的第一个下标
         final int baseVal = i << 6;
-
+        // 循环64次（指代当前的下标），从低位到高位
         for (int j = 0; j < 64; j ++) {
-            // 第一位是0（2的倍数）
+            // 2的倍数，即最后1位为0
             if ((bits & 1) == 0) {
-                // 获取绝对下标
+                // 这里相当于加，将i*64,之后加上j，获取绝对下标
                 int val = baseVal | j;
-                // 不能越界
+                // 小于块数（不能越界）
                 if (val < maxNumElems) {
                     return val;
                 } else {
@@ -218,7 +239,18 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
         return -1;
     }
 
+    /**
+     * 一个long整数，其中低32位表示二叉树中的分配的节点，高32位表示subPage中分配的具体位置
+     *     |<--   24   -->| <--   6      --> | <--         32         --> |
+     *     |  long数组偏移 |  long的二进制位偏移|       所属Chunk标号         |
+     * @param bitmapIdx
+     * @return
+     */
     private long toHandle(int bitmapIdx) {
+        /**
+         * 0x4000000000000000L , 最高位为1且最低位都是0的二进制数,即0b01000{60}
+         *  bitmapIdx << 32 | memoryMapIdx，将memoryMapIdx保存在bitmapIdx << 32的低32中，
+         */
         return 0x4000000000000000L | (long) bitmapIdx << 32 | memoryMapIdx;
     }
 

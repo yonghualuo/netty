@@ -42,6 +42,15 @@ abstract class PooledByteBuf<T> extends AbstractReferenceCountedByteBuf {
         this.recyclerHandle = (Handle<PooledByteBuf<T>>) recyclerHandle;
     }
 
+    /**
+     *
+     * @param chunk
+     * @param handle
+     * @param offset 偏移量
+     * @param length
+     * @param maxLength 当前节点的长度
+     * @param cache
+     */
     void init(PoolChunk<T> chunk, long handle, int offset, int length, int maxLength, PoolThreadCache cache) {
         init0(chunk, handle, offset, length, maxLength, cache);
     }
@@ -53,12 +62,14 @@ abstract class PooledByteBuf<T> extends AbstractReferenceCountedByteBuf {
     private void init0(PoolChunk<T> chunk, long handle, int offset, int length, int maxLength, PoolThreadCache cache) {
         assert handle >= 0;
         assert chunk != null;
-
+        // 在哪一块内存上进行分配
         this.chunk = chunk;
+        // 在这一块内存上的哪一块连续内存
+        this.handle = handle;
         memory = chunk.memory;
         allocator = chunk.arena.parent;
         this.cache = cache;
-        this.handle = handle;
+        // 偏移量
         this.offset = offset;
         this.length = length;
         this.maxLength = maxLength;
@@ -164,11 +175,15 @@ abstract class PooledByteBuf<T> extends AbstractReferenceCountedByteBuf {
     protected final void deallocate() {
         if (handle >= 0) {
             final long handle = this.handle;
+            // 表示当前ByteBuf不再指向任何一块内存
             this.handle = -1;
+            // 这里将memory也设置为null
             memory = null;
             tmpNioBuf = null;
+            // 这一步将ByteBuf的内存进行释放
             chunk.arena.free(chunk, handle, maxLength, cache);
             chunk = null;
+            // 将对象放入对象回收站，循环利用。
             recycle();
         }
     }

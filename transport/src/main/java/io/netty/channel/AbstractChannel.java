@@ -75,6 +75,8 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
     /**
      * Creates a new instance.
      *
+     * Netty为每个Channel连接创建一个独立的pipeline
+     *
      * @param parent
      *        the parent of this channel. {@code null} if there's no parent.
      */
@@ -424,6 +426,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
         private volatile ChannelOutboundBuffer outboundBuffer = new ChannelOutboundBuffer(AbstractChannel.this);
         private RecvByteBufAllocator.Handle recvHandle;
+        // 是否有消息在发送
         private boolean inFlush0;
         /** true if the channel has never been registered, false otherwise */
         private boolean neverRegistered = true;
@@ -709,6 +712,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
             final boolean wasActive = isActive();
             final ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;
+            // 将发送队列清空，不再允许发送新的消息
             this.outboundBuffer = null; // Disallow adding any messages and flushes to outboundBuffer.
             Executor closeExecutor = prepareToClose();
             if (closeExecutor != null) {
@@ -745,6 +749,10 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                         outboundBuffer.close(closeCause);
                     }
                 }
+                /**
+                 * 如果有消息在发送，则将SelectionKey的去注册操作封装成Task，
+                 * 放到eventloop中稍后执行。
+                 */
                 if (inFlush0) {
                     invokeLater(new Runnable() {
                         @Override
@@ -753,6 +761,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                         }
                     });
                 } else {
+                    // 触发链路关闭通知事件
                     fireChannelInactiveAndDeregister(wasActive);
                 }
             }
@@ -760,6 +769,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
         private void doClose0(ChannelPromise promise) {
             try {
+                //关闭链路
                 doClose();
                 closeFuture.setClosed();
                 safeSetSuccess(promise);
@@ -859,7 +869,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
         @Override
         public final void write(Object msg, ChannelPromise promise) {
             assertEventLoop();
-
+            // 负责缓冲写进来的ByteBuf
             ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;
             if (outboundBuffer == null) {
                 // If the outboundBuffer is null we know the channel was closed and so
@@ -874,6 +884,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
             int size;
             try {
+                // 非堆外内存转化为堆外内存
                 msg = filterOutboundMessage(msg);
                 size = pipeline.estimatorHandle().size(msg);
                 if (size < 0) {
@@ -884,7 +895,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 ReferenceCountUtil.release(msg);
                 return;
             }
-
+            // 插入写队列
             outboundBuffer.addMessage(msg, size, promise);
         }
 
@@ -903,6 +914,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
         @SuppressWarnings("deprecation")
         protected void flush0() {
+            // 当前Flush是否在进行中
             if (inFlush0) {
                 // Avoid re-entrance
                 return;

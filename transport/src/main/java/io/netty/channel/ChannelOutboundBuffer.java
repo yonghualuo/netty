@@ -71,11 +71,16 @@ public final class ChannelOutboundBuffer {
 
     private final Channel channel;
 
+    /**
+     * 从flushedEntry到unflushedEntry的Entry，都是已经被flush的Entry。
+     * 从unflushedEntry到tailEntry的Entry都是没被flush的Entry
+     */
     // Entry(flushedEntry) --> ... Entry(unflushedEntry) --> ... Entry(tailEntry)
-    //
+    // 第一个被flush的Entry
     // The Entry that is the first in the linked-list structure that was flushed
     private Entry flushedEntry;
     // The Entry which is the first unflushed in the linked-list structure
+    // 第一个未被flush的Entry
     private Entry unflushedEntry;
     // The Entry which represents the tail of the buffer
     private Entry tailEntry;
@@ -86,7 +91,9 @@ public final class ChannelOutboundBuffer {
     private long nioBufferSize;
 
     private boolean inFail;
-
+    /**
+     * 当前缓冲区里面有多少待写的字节
+     */
     private static final AtomicLongFieldUpdater<ChannelOutboundBuffer> TOTAL_PENDING_SIZE_UPDATER =
             AtomicLongFieldUpdater.newUpdater(ChannelOutboundBuffer.class, "totalPendingSize");
 
@@ -111,6 +118,7 @@ public final class ChannelOutboundBuffer {
      */
     public void addMessage(Object msg, int size, ChannelPromise promise) {
         Entry entry = Entry.newInstance(msg, size, total(msg), promise);
+        // 第一次调用write()
         if (tailEntry == null) {
             flushedEntry = null;
         } else {
@@ -165,12 +173,18 @@ public final class ChannelOutboundBuffer {
         incrementPendingOutboundBytes(size, true);
     }
 
+    /**
+     * 统计当前有多少字节需要被写出
+     * @param size
+     * @param invokeLater
+     */
     private void incrementPendingOutboundBytes(long size, boolean invokeLater) {
         if (size == 0) {
             return;
         }
 
         long newWriteBufferSize = TOTAL_PENDING_SIZE_UPDATER.addAndGet(this, size);
+        // 超过64kb
         if (newWriteBufferSize > channel.config().getWriteBufferHighWaterMark()) {
             setUnwritable(invokeLater);
         }
@@ -188,9 +202,11 @@ public final class ChannelOutboundBuffer {
         if (size == 0) {
             return;
         }
-
+        // 从总的大小减去
         long newWriteBufferSize = TOTAL_PENDING_SIZE_UPDATER.addAndGet(this, -size);
+        // 直到减至一个小于32字节的阈值
         if (notifyWritability && newWriteBufferSize < channel.config().getWriteBufferLowWaterMark()) {
+            // 设置写状态
             setWritable(invokeLater);
         }
     }
@@ -674,6 +690,7 @@ public final class ChannelOutboundBuffer {
                 int size = e.pendingSize;
                 TOTAL_PENDING_SIZE_UPDATER.addAndGet(this, -size);
 
+                // 释放发送队列中所有尚未完成发送的ByteBuf（关闭之前没有被flushed的message），等待GC。
                 if (!e.cancelled) {
                     ReferenceCountUtil.safeRelease(e.msg);
                     safeFail(e.promise, cause);

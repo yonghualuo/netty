@@ -22,6 +22,8 @@ import io.netty.util.ByteProcessor;
 import java.util.List;
 
 /**
+ * 行分隔符
+ *
  * A decoder that splits the received {@link ByteBuf}s on line endings.
  * <p>
  * Both {@code "\n"} and {@code "\r\n"} are handled.
@@ -33,6 +35,7 @@ public class LineBasedFrameDecoder extends ByteToMessageDecoder {
     private final int maxLength;
     /** Whether or not to throw an exception as soon as we exceed maxLength. */
     private final boolean failFast;
+    // 最终解析的数据包是否带有换行符
     private final boolean stripDelimiter;
 
     /** True if we're discarding input because we're already over maxLength.  */
@@ -90,11 +93,14 @@ public class LineBasedFrameDecoder extends ByteToMessageDecoder {
      *                          be created.
      */
     protected Object decode(ChannelHandlerContext ctx, ByteBuf buffer) throws Exception {
+        // 找到这行的结尾
         final int eol = findEndOfLine(buffer);
-        if (!discarding) {
+        if (!discarding) { // 非丢弃模式
             if (eol >= 0) {
                 final ByteBuf frame;
+                // 计算从换行符到可读字节之间的长度
                 final int length = eol - buffer.readerIndex();
+                // 获取分隔符长度，如果是\r\n，则长度为2
                 final int delimLength = buffer.getByte(eol) == '\r'? 2 : 1;
 
                 if (length > maxLength) {
@@ -104,9 +110,12 @@ public class LineBasedFrameDecoder extends ByteToMessageDecoder {
                 }
 
                 if (stripDelimiter) {
+                    // 截取有效长度
                     frame = buffer.readRetainedSlice(length);
+                    // 跳过分隔符的长度
                     buffer.skipBytes(delimLength);
                 } else {
+                    // 包含分隔符
                     frame = buffer.readRetainedSlice(length + delimLength);
                 }
 

@@ -471,6 +471,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             try {
                 if (isShuttingDown()) {
                     closeAll();
+                    // 确认是否真的退出了？
                     if (confirmShutdown()) {
                         return;
                     }
@@ -597,7 +598,9 @@ public final class NioEventLoop extends SingleThreadEventLoop {
     }
 
     private void processSelectedKey(SelectionKey k, AbstractNioChannel ch) {
+        // 获取Channel中Unsafe
         final AbstractNioChannel.NioUnsafe unsafe = ch.unsafe();
+        // 如果这个key不是合法的，说明这个Channel可能有问题
         if (!k.isValid()) {
             final EventLoop eventLoop;
             try {
@@ -621,9 +624,11 @@ public final class NioEventLoop extends SingleThreadEventLoop {
         }
 
         try {
+            // 获得key的I/O事件
             int readyOps = k.readyOps();
             // We first need to call finishConnect() before try to trigger a read(...) or write(...) as otherwise
             // the NIO JDK channel implementation may throw a NotYetConnectedException.
+            // 连接事件
             if ((readyOps & SelectionKey.OP_CONNECT) != 0) {
                 // remove OP_CONNECT as otherwise Selector.select(..) will always return without blocking
                 // See https://github.com/netty/netty/issues/924
@@ -635,6 +640,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             }
 
             // Process OP_WRITE first as we may be able to write some queued buffers and so free memory.
+            // 写事件
             if ((readyOps & SelectionKey.OP_WRITE) != 0) {
                 // Call forceFlush which will also take care of clear the OP_WRITE once there is nothing left to write
                 ch.unsafe().forceFlush();
@@ -642,7 +648,11 @@ public final class NioEventLoop extends SingleThreadEventLoop {
 
             // Also check for readOps of 0 to workaround possible JDK bug which may otherwise lead
             // to a spin loop
+            // 读事件和接手连接事件
+            // 如果当前NioEventLoop是Worker线程的话，这里就是Op_Read事件。
+            // 如果当前NioEventLoop是Boss线程的话，这里就是Op_Accept事件。
             if ((readyOps & (SelectionKey.OP_READ | SelectionKey.OP_ACCEPT)) != 0 || readyOps == 0) {
+                // @link NioByteUnsafe
                 unsafe.read();
             }
         } catch (CancelledKeyException ignored) {
@@ -674,6 +684,9 @@ public final class NioEventLoop extends SingleThreadEventLoop {
         }
     }
 
+    /**
+     * 把注册在selector上所有的Channel都关闭
+     */
     private void closeAll() {
         selectAgain();
         Set<SelectionKey> keys = selector.keys();

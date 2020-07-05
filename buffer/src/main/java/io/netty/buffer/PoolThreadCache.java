@@ -35,6 +35,24 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * technics of
  * <a href="https://www.facebook.com/notes/facebook-engineering/scalable-memory-allocation-using-jemalloc/480222803919">
  * Scalable memory allocation using jemalloc</a>.
+ *
+ *
+ *
+ * {@linkplain jemalloc.pdf}
+ *     Allocation size classes fall into three major categories: small, large, and huge. All
+ * allocation requests are rounded up to the nearest size class boundary.
+ * Huge allocations are larger than half of a chunk, and are directly backed by dedicated chunks. Metadata about huge allocations are stored in a single red-black tree.
+ * Since most applications create few(if any huge allocations), using a single tree is
+ * not a scalability issue.
+ *    For small and large allocations, chunks are carved into page runs using the binary buddy algorithm.Runs can be repeatedly split in half to as small as one page, but can only be coalesced in ways that reverse the splitting process.
+ * Information about the states of the runs is stored as a page map at the beginning of each chunk. By storing this information separately from the runs, pages are only ever
+ * touched if they are used. This also enables the dedication of runs to large allocations, which are larger than half of a page, but no larger than half of a chunk.
+ *    Small allocations fall into three subcategories: tiny, quantum-spaced, and sub-page. Modern architectures impose alignment constraints on pointers, depending on data type. malloc(3) is required to return memory that is suitably aligned for any purpose.
+ * This worst case alignment requirement is referred to as the quantum size here (typically 16 bytes). In practice, power-of-two alignment works for tiny allocations since they are incapable of containing objects that are large enough to require quantum alignment.
+ *
+ *
+ *  <p>PoolArena</p>
+ *  1、分配的内存<PageSize时，
  */
 final class PoolThreadCache {
 
@@ -210,10 +228,12 @@ final class PoolThreadCache {
      */
     @SuppressWarnings({ "unchecked", "rawtypes" })
     boolean add(PoolArena<?> area, PoolChunk chunk, long handle, int normCapacity, SizeClass sizeClass) {
+        // 获取MemoryRegionCache节点
         MemoryRegionCache<?> cache = cache(area, normCapacity, sizeClass);
         if (cache == null) {
             return false;
         }
+        // 将Chunk和Handle封装成实体加到Queue里面
         return cache.add(chunk, handle);
     }
 

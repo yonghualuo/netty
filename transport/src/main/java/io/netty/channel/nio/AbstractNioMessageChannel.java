@@ -87,6 +87,9 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
                     exception = t;
                 }
 
+                /**
+                 * readBuf: NioSocketChannel
+                 */
                 int size = readBuf.size();
                 for (int i = 0; i < size; i ++) {
                     readPending = false;

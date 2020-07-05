@@ -118,6 +118,11 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
         return (SocketChannel) super.javaChannel();
     }
 
+    /**
+     * 判断TCP连接是否完成
+     *
+     * @return
+     */
     @Override
     public boolean isActive() {
         SocketChannel ch = javaChannel();
@@ -338,9 +343,17 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
         javaChannel().close();
     }
 
+    /**
+     * 将Channel中的数据读取到刚分配的ByteBuf中，并返回读取的字节数。
+     *
+     * @param byteBuf
+     * @return
+     * @throws Exception
+     */
     @Override
     protected int doReadBytes(ByteBuf byteBuf) throws Exception {
         final RecvByteBufAllocator.Handle allocHandle = unsafe().recvBufAllocHandle();
+        // 设置最多能从Channel中读取多少字节写入ByteBuf
         allocHandle.attemptedBytesRead(byteBuf.writableBytes());
         return byteBuf.writeBytes(javaChannel(), allocHandle.attemptedBytesRead());
     }
@@ -374,6 +387,7 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
     protected void doWrite(ChannelOutboundBuffer in) throws Exception {
         SocketChannel ch = javaChannel();
         int writeSpinCount = config().getWriteSpinCount();
+        // 最多些16次
         do {
             if (in.isEmpty()) {
                 // All written so clear OP_WRITE
@@ -401,6 +415,10 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
                     ByteBuffer buffer = nioBuffers[0];
                     int attemptedBytes = buffer.remaining();
                     final int localWrittenBytes = ch.write(buffer);
+                    /**
+                     * 如果为0，说明TCP发送缓冲区已满，不能继续再向里面写入消息，
+                     * 因此，将写半包标识设置为true，退出循环。
+                     */
                     if (localWrittenBytes <= 0) {
                         incompleteWrite(true);
                         return;
@@ -430,6 +448,7 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
             }
         } while (writeSpinCount > 0);
 
+        // 写了16次数据，还是没有写完，直接schedule一个新的task
         incompleteWrite(writeSpinCount < 0);
     }
 
