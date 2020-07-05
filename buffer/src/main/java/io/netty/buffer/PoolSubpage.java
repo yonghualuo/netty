@@ -56,25 +56,31 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
         this.memoryMapIdx = memoryMapIdx;
         this.runOffset = runOffset;
         this.pageSize = pageSize;
+        /**
+         * 每个long型数字，有64位，可以记录64个子块的数量
+         */
         bitmap = new long[pageSize >>> 10]; // pageSize / 16 / 64
         init(head, elemSize);
     }
 
     void init(PoolSubpage<T> head, int elemSize) {
         doNotDestroy = true;
+        // 保存当前分配的缓冲区大小
         this.elemSize = elemSize;
         if (elemSize != 0) {
             maxNumElems = numAvail = pageSize / elemSize;
             nextAvail = 0;
             bitmapLength = maxNumElems >>> 6;
-            if ((maxNumElems & 63) != 0) {
+            if ((maxNumElems & 63) != 0) { // 不是64的倍数
                 bitmapLength ++;
             }
 
             for (int i = 0; i < bitmapLength; i ++) {
+                // 0 表示未分配， 1表示已分配
                 bitmap[i] = 0;
             }
         }
+        // 加到Arena里面
         addToPool(head);
     }
 
@@ -90,16 +96,20 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
             return -1;
         }
 
+        // 取一个bitmap中可用的id(绝对ID)
         final int bitmapIdx = getNextAvail();
+        // 除以64（bitmap的相对下标）
         int q = bitmapIdx >>> 6;
+        // 取余，当前绝对ID的偏移量
         int r = bitmapIdx & 63;
         assert (bitmap[q] >>> r & 1) == 0;
+        // 当前位标记为1
         bitmap[q] |= 1L << r;
 
         if (-- numAvail == 0) {
             removeFromPool();
         }
-
+        // bitmapIdx换成handle
         return toHandle(bitmapIdx);
     }
 
@@ -162,6 +172,7 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
     private int getNextAvail() {
         int nextAvail = this.nextAvail;
         if (nextAvail >= 0) {
+            // 一个子SubPage被释放之后，会记录当前SubPage的bitmapIdx的位置，下次分配可以直接通过bitmapIdx获取一个SubPage。
             this.nextAvail = -1;
             return nextAvail;
         }
@@ -169,11 +180,15 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
     }
 
     private int findNextAvail() {
+        // 当前long数组
         final long[] bitmap = this.bitmap;
+        // 获取其长度
         final int bitmapLength = this.bitmapLength;
         for (int i = 0; i < bitmapLength; i ++) {
             long bits = bitmap[i];
+            // 说明64位没有全部占满
             if (~bits != 0) {
+                // 找下一个节点
                 return findNextAvail0(i, bits);
             }
         }
@@ -182,17 +197,22 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
 
     private int findNextAvail0(int i, long bits) {
         final int maxNumElems = this.maxNumElems;
+        // 代表当前long的第一个下标
         final int baseVal = i << 6;
 
         for (int j = 0; j < 64; j ++) {
+            // 第一位是0（2的倍数）
             if ((bits & 1) == 0) {
+                // 获取绝对下标
                 int val = baseVal | j;
+                // 不能越界
                 if (val < maxNumElems) {
                     return val;
                 } else {
                     break;
                 }
             }
+            // 当前下标不为0，右移一位
             bits >>>= 1;
         }
         return -1;

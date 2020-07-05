@@ -159,7 +159,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
          *            /   \          /  \
          *   2              。。。 。。。。
          *  。。。   /   \
-         *  11   0～8kb 8～16kb          。。。
+         *  11   0～8kb 8～16kb          。。。     【2048】
          *
          */
         // Generate the memory map. 节点数量4096
@@ -230,7 +230,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
         // 如果以Page为单位分配
         if ((normCapacity & subpageOverflowMask) != 0) { // >= pageSize
             return allocateRun(normCapacity);
-        } else {
+        } else { // subPage级别
             return allocateSubpage(normCapacity);
         }
     }
@@ -247,6 +247,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
         while (id > 1) {
             int parentId = id >>> 1;
             byte val1 = value(id);
+            // 兄弟节点
             byte val2 = value(id ^ 1);
             byte val = val1 < val2 ? val1 : val2;
             setValue(parentId, val);
@@ -344,16 +345,18 @@ final class PoolChunk<T> implements PoolChunkMetric {
         PoolSubpage<T> head = arena.findSubpagePoolHead(normCapacity);
         synchronized (head) {
             int d = maxOrder; // subpages are only be allocated from pages i.e., leaves
+            // 表示在第11层分配节点
             int id = allocateNode(d);
             if (id < 0) {
                 return id;
             }
 
+            // 获取初始化的SubPage
             final PoolSubpage<T>[] subpages = this.subpages;
             final int pageSize = this.pageSize;
 
             freeBytes -= pageSize;
-
+            // 表示第几个SubPage
             int subpageIdx = subpageIdx(id);
             PoolSubpage<T> subpage = subpages[subpageIdx];
             if (subpage == null) {
@@ -362,6 +365,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
             } else {
                 subpage.init(head, normCapacity);
             }
+            // 取出一个subpage
             return subpage.allocate();
         }
     }
@@ -465,6 +469,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
     }
 
     private static int bitmapIdx(long handle) {
+        // 有关subpage
         return (int) (handle >>> Integer.SIZE);
     }
 

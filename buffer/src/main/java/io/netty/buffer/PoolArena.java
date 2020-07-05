@@ -134,6 +134,12 @@ abstract class PoolArena<T> implements PoolArenaMetric {
         chunkListMetrics = Collections.unmodifiableList(metrics);
     }
 
+    /**
+     * PoolSubpage 双向链表， 32个
+     *
+     * @param pageSize
+     * @return
+     */
     private PoolSubpage<T> newSubpagePoolHead(int pageSize) {
         PoolSubpage<T> head = new PoolSubpage<T>(pageSize);
         head.prev = head;
@@ -212,7 +218,7 @@ abstract class PoolArena<T> implements PoolArenaMetric {
              * {@link PoolChunk#free(long)} may modify the doubly linked list as well.
              */
             synchronized (head) {
-                final PoolSubpage<T> s = head.next;
+                final PoolSubpage<T> s = head.next; // head
                 if (s != head) {
                     assert s.doNotDestroy && s.elemSize == normCapacity;
                     long handle = s.allocate();
@@ -258,6 +264,7 @@ abstract class PoolArena<T> implements PoolArenaMetric {
         // Add a new chunk.
         // 创建Chunk进行内存分配。
         PoolChunk<T> c = newChunk(pageSize, maxOrder, pageShifts, chunkSize);
+        // index of MemoryMap
         long handle = c.allocate(normCapacity);
         assert handle > 0;
         // 初始化ByteBuf
