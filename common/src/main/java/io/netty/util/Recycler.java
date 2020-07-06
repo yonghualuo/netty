@@ -154,6 +154,7 @@ public abstract class Recycler<T> {
 
     @SuppressWarnings("unchecked")
     public final T get() {
+        // =0，说明对象将一个都不会回收
         if (maxCapacityPerThread == 0) {
             return newObject((Handle<T>) NOOP_HANDLE);
         }
@@ -205,6 +206,7 @@ public abstract class Recycler<T> {
         boolean hasBeenRecycled;
 
         private Stack<?> stack;
+        // 用来绑定回收的对象本身
         private Object value;
 
         DefaultHandle(Stack<?> stack) {
@@ -220,6 +222,10 @@ public abstract class Recycler<T> {
         }
     }
 
+    /**
+     * 每个线程都对应一个Stack。
+     * 每个Stack中都维护着一个DefaultHandle类型的数组，用于盛放回收的对象。
+     */
     private static final FastThreadLocal<Map<Stack<?>, WeakOrderQueue>> DELAYED_RECYCLED =
             new FastThreadLocal<Map<Stack<?>, WeakOrderQueue>>() {
         @Override
@@ -444,6 +450,7 @@ public abstract class Recycler<T> {
         // than the stack owner recycles: when we run out of items in our stack we iterate this collection
         // to scavenge those that can be reused. this permits us to incur minimal thread synchronisation whilst
         // still recycling all items.
+        // Recycler对象自身
         final Recycler<T> parent;
 
         // We store the Thread in a WeakReference as otherwise we may be the only ones that still hold a strong
@@ -452,15 +459,24 @@ public abstract class Recycler<T> {
         // The biggest issue is if we do not use a WeakReference the Thread may not be able to be collected at all if
         // the user will store a reference to the DefaultHandle somewhere and never clear this reference (or not clear
         // it in a timely manner).
+        // 当前Stack绑定的哪个线程
         final WeakReference<Thread> threadRef;
+        // 表示在线程A中创建的对象，在其他线程中缓存的最大个数
         final AtomicInteger availableSharedCapacity;
+        // 设置该线程能回收的线程对象的最大值
         final int maxDelayedQueues;
 
         private final int maxCapacity;
+        // 用来控制对象回收的频率
         private final int ratioMask;
+        // Stack中存储的对象
         private DefaultHandle<?>[] elements;
+        // 当前Stack的对象数
         private int size;
         private int handleRecycleCount = -1; // Start with -1 so the first one will be recycled.
+        /**
+         * WeakOrderQueue存放线程1创建且在线程2进行释放的对象
+         */
         private WeakOrderQueue cursor, prev;
         private volatile WeakOrderQueue head;
 
